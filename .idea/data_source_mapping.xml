@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/sql/init/00-init-db.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/01-user.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/02-patient.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/03-appointment.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/04-medical.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/05-ai.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/06-image.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/07-pharmacy.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/08-notify.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+    <file url="file://$PROJECT_DIR$/sql/init/09-init-data.sql" value="550a0a30-ae5c-4250-afd1-f4fe812f7bcd" />
+  </component>
+</project>
