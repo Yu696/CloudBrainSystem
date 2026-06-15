@@ -1,18 +1,24 @@
 <template>
   <el-container class="layout-container">
     <!-- 侧边栏 -->
-    <el-aside :width="isCollapse ? '64px' : '220px'" class="layout-aside">
+    <el-aside :width="isCollapse ? '64px' : '240px'" class="layout-aside">
       <div class="logo-area">
-        <span v-if="!isCollapse" class="logo-text">云脑诊疗平台</span>
-        <span v-else class="logo-text-mini">云脑</span>
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" stroke-linejoin="round"/>
+            <path d="M2 17l10 5 10-5" stroke-linejoin="round"/>
+            <path d="M2 12l10 5 10-5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <transition name="fade">
+          <span v-if="!isCollapse" class="logo-text">云脑诊疗平台</span>
+        </transition>
       </div>
       <el-menu
         :default-active="activeMenu"
         :collapse="isCollapse"
         :router="true"
-        background-color="#001529"
-        text-color="#ffffffbf"
-        active-text-color="#fff"
+        class="el-menu--dark"
       >
         <el-menu-item index="/dashboard">
           <el-icon><Odometer /></el-icon>
@@ -43,18 +49,31 @@
     <el-container>
       <!-- 顶栏 -->
       <el-header class="layout-header">
-        <el-icon class="collapse-btn" @click="isCollapse = !isCollapse">
-          <Fold v-if="!isCollapse" />
-          <Expand v-else />
-        </el-icon>
+        <div class="header-left">
+          <el-icon class="collapse-btn" @click="isCollapse = !isCollapse">
+            <Fold v-if="!isCollapse" />
+            <Expand v-else />
+          </el-icon>
+          <el-breadcrumb separator="›" class="breadcrumb">
+            <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="route.meta.title">{{ route.meta.title as string }}</el-breadcrumb-item>
+          </el-breadcrumb>
+        </div>
         <div class="header-right">
-          <span class="user-name">{{ userStore.userInfo?.realName || userStore.userInfo?.userName }}</span>
+          <span class="user-greeting">你好，{{ userStore.userInfo?.realName || userStore.userInfo?.userName }}</span>
           <el-dropdown trigger="click">
-            <el-avatar :size="32" icon="UserFilled" style="cursor: pointer; background: #409eff" />
+            <span class="user-avatar-wrapper">
+              <el-avatar :size="34" icon="UserFilled" class="user-avatar" />
+              <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+            </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="router.push('/profile')">个人信息</el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+                <el-dropdown-item @click="router.push('/profile')">
+                  <el-icon><User /></el-icon>个人信息
+                </el-dropdown-item>
+                <el-dropdown-item divided @click="handleLogout">
+                  <el-icon><SwitchButton /></el-icon>退出登录
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -63,7 +82,11 @@
 
       <!-- 内容区 -->
       <el-main class="layout-main">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition name="fade-slide" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </el-main>
     </el-container>
   </el-container>
@@ -72,8 +95,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Odometer, User, Setting, UserFilled, Key, Fold, Expand } from '@element-plus/icons-vue'
+import {
+  Odometer, User, Setting, UserFilled, Key,
+  Fold, Expand, ArrowDown, SwitchButton
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
@@ -83,8 +110,14 @@ const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
 function handleLogout() {
-  userStore.logout()
-  router.push('/login')
+  ElMessageBox.confirm('确定退出登录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'info'
+  }).then(() => {
+    userStore.logout()
+    router.push('/login')
+  }).catch(() => {})
 }
 </script>
 
@@ -93,65 +126,145 @@ function handleLogout() {
   height: 100%;
 }
 
+/* ===== 侧边栏 ===== */
 .layout-aside {
-  background-color: #001529;
+  background: var(--cb-sidebar-bg);
   overflow-y: auto;
-  transition: width 0.3s;
+  overflow-x: hidden;
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
 }
 
 .logo-area {
-  height: 60px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   color: #fff;
   font-weight: 700;
   font-size: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  padding: 0 16px;
+  overflow: hidden;
 }
 
-.logo-text-mini {
-  font-size: 14px;
+.logo-icon {
+  color: var(--cb-primary-light);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
+.logo-text {
+  font-size: 17px;
+  white-space: nowrap;
+  letter-spacing: 1px;
+}
+
+.layout-aside .el-menu {
+  border-right: none;
+  flex: 1;
+}
+
+.layout-aside .el-menu .el-menu-item,
+.layout-aside .el-menu .el-sub-menu__title {
+  transition: all 0.2s ease;
+}
+
+.layout-aside .el-menu .el-menu-item.is-active {
+  background: var(--cb-primary) !important;
+}
+
+/* ===== 顶栏 ===== */
 .layout-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  padding: 0 20px;
-  height: 60px;
+  background: var(--cb-white);
+  border-bottom: 1px solid var(--cb-border);
+  padding: 0 24px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .collapse-btn {
   font-size: 20px;
   cursor: pointer;
-  color: #606266;
+  color: var(--cb-text-secondary);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.collapse-btn:hover {
+  color: var(--cb-primary);
+  background: var(--cb-primary-lighter);
 }
 
-.collapse-btn:hover {
-  color: #409eff;
+.breadcrumb {
+  font-size: var(--cb-font-base);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.user-name {
-  font-size: 14px;
-  color: #303133;
+.user-greeting {
+  font-size: var(--cb-font-sm);
+  color: var(--cb-text-secondary);
 }
 
+.user-avatar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 2px 8px 2px 2px;
+  border-radius: 20px;
+  transition: background 0.2s;
+}
+.user-avatar-wrapper:hover {
+  background: var(--cb-primary-lighter);
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, var(--cb-primary), var(--cb-primary-light)) !important;
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  color: var(--cb-text-secondary);
+}
+
+/* ===== 内容区 ===== */
 .layout-main {
-  background-color: #f0f2f5;
-  padding: 20px;
+  background: var(--cb-background);
+  padding: 24px;
   overflow-y: auto;
 }
 
-.el-menu {
-  border-right: none;
+/* 页面切换动画 */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.25s ease;
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-12px);
 }
 </style>

@@ -1,47 +1,75 @@
 <template>
   <div class="permission-page">
-    <el-row :gutter="20">
+    <div class="page-title">权限管理</div>
+    <el-row :gutter="24">
       <!-- 左侧：角色列表 -->
-      <el-col :span="8">
-        <el-card shadow="never">
-          <template #header>
-            <span class="card-title">角色列表</span>
-          </template>
-          <el-table :data="roles" border stripe v-loading="roleLoading" @row-click="handleRoleClick"
-            :row-class-name="rowClassName">
-            <el-table-column prop="roleName" label="角色名称" />
-            <el-table-column prop="roleCode" label="编码" width="100" />
-          </el-table>
-        </el-card>
+      <el-col :span="7">
+        <div class="cb-card">
+          <div class="cb-card-header">
+            <el-icon class="header-icon"><UserFilled /></el-icon>
+            <span>角色列表</span>
+          </div>
+          <div class="cb-card-body" style="padding: 0">
+            <el-table
+              :data="roles"
+              border
+              stripe
+              v-loading="roleLoading"
+              @row-click="handleRoleClick"
+              :row-class-name="activeRowClass"
+              class="cb-table"
+              height="460"
+            >
+              <el-table-column prop="roleName" label="角色名称" min-width="100" />
+              <el-table-column prop="roleCode" label="编码" width="90" />
+            </el-table>
+          </div>
+        </div>
       </el-col>
 
       <!-- 右侧：权限配置 -->
-      <el-col :span="16">
-        <el-card shadow="never">
-          <template #header>
-            <span class="card-title">权限配置</span>
-          </template>
-          <div v-if="currentRole">
-            <p style="margin-bottom: 16px; color: #606266;">
-              为角色 <strong>{{ currentRole.roleName }}</strong> 配置权限
-            </p>
-            <el-tree
-              ref="treeRef"
-              :data="permissionTree"
-              show-checkbox
-              node-key="permissionId"
-              default-expand-all
-              :props="{ label: 'permissionName', children: 'children' }"
-            />
-            <div style="margin-top: 20px">
-              <el-button type="primary" :loading="saveLoading" @click="handleSave">
-                保存权限
-              </el-button>
-              <el-button @click="handleRefresh">刷新</el-button>
-            </div>
+      <el-col :span="17">
+        <div class="cb-card">
+          <div class="cb-card-header">
+            <el-icon class="header-icon"><Key /></el-icon>
+            <span>权限配置 — {{ currentRole?.roleName || '未选择' }}</span>
+            <el-tag v-if="currentRole" size="small" effect="plain">{{ currentRole.roleCode }}</el-tag>
           </div>
-          <el-empty v-else description="请从左侧选择角色" />
-        </el-card>
+          <div class="cb-card-body">
+            <div v-if="currentRole" class="permission-content">
+              <div class="permission-hint">
+                <el-alert
+                  :title="`为角色「${currentRole.roleName}」配置可访问的权限`"
+                  type="info"
+                  :closable="false"
+                  show-icon
+                />
+              </div>
+              <el-divider />
+              <el-tree
+                ref="treeRef"
+                :data="permissionTree"
+                show-checkbox
+                node-key="permissionId"
+                default-expand-all
+                :props="{ label: 'permissionName', children: 'children' }"
+                class="permission-tree"
+              />
+              <el-divider />
+              <div class="permission-actions">
+                <el-button type="primary" :loading="saveLoading" @click="handleSave" round>
+                  保存权限
+                </el-button>
+                <el-button @click="handleRefresh" :disabled="!currentRole">
+                  重置
+                </el-button>
+                <el-button text @click="handleCheckAll" v-if="!allChecked">全选</el-button>
+                <el-button text @click="handleUncheckAll" v-if="allChecked">取消全选</el-button>
+              </div>
+            </div>
+            <el-empty v-else description="请从左侧选择角色" :image-size="80" />
+          </div>
+        </div>
       </el-col>
     </el-row>
   </div>
@@ -51,6 +79,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ElTree } from 'element-plus'
+import { UserFilled, Key } from '@element-plus/icons-vue'
 import { getPermissionsApi, updatePermissionApi, listAllRolesApi } from '@/api/user'
 import type { Permission } from '@/types/user'
 
@@ -65,19 +94,17 @@ interface PermissionNode extends Permission {
 }
 
 const roles = ref<RoleItem[]>([])
-
 const permissionTree = ref<PermissionNode[]>([])
 const roleLoading = ref(false)
 const saveLoading = ref(false)
 const currentRole = ref<RoleItem | null>(null)
 const treeRef = ref<InstanceType<typeof ElTree>>()
-const currentRoleId = ref('')
+const allChecked = ref(false)
 
-function rowClassName({ row }: { row: RoleItem }) {
+function activeRowClass({ row }: { row: RoleItem }) {
   return currentRole.value?.roleId === row.roleId ? 'active-row' : ''
 }
 
-// 权限树结构
 const mockPermissions: PermissionNode[] = [
   {
     permissionId: '1', permissionName: '用户管理', permissionCode: 'user:manage',
@@ -148,7 +175,7 @@ async function loadRoles() {
 
 async function handleRoleClick(role: RoleItem) {
   currentRole.value = role
-  currentRoleId.value = role.roleId
+  allChecked.value = false
 
   try {
     const res = await getPermissionsApi(role.roleId)
@@ -164,7 +191,6 @@ async function handleRoleClick(role: RoleItem) {
 
 async function handleSave() {
   if (!currentRole.value) return
-  // 只获取叶子节点(按钮级权限)，父节点状态由子节点自动推导
   const checkedKeys = treeRef.value?.getCheckedKeys(true) as string[]
 
   saveLoading.value = true
@@ -186,15 +212,78 @@ function handleRefresh() {
     handleRoleClick(currentRole.value)
   }
 }
+
+function handleCheckAll() {
+  const allIds = getAllNodeIds(permissionTree.value)
+  treeRef.value?.setCheckedKeys(allIds)
+  allChecked.value = true
+}
+
+function handleUncheckAll() {
+  treeRef.value?.setCheckedKeys([])
+  allChecked.value = false
+}
+
+function getAllNodeIds(nodes: PermissionNode[]): string[] {
+  const ids: string[] = []
+  for (const node of nodes) {
+    ids.push(node.permissionId)
+    if (node.children?.length) {
+      ids.push(...getAllNodeIds(node.children))
+    }
+  }
+  return ids
+}
 </script>
 
 <style scoped>
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
+.permission-page {
+  max-width: 1200px;
 }
 
+.header-icon {
+  color: var(--cb-primary);
+  font-size: 18px;
+}
+
+.permission-content {
+  padding: 0 4px;
+}
+
+.permission-hint {
+  margin-bottom: 0;
+}
+
+.permission-tree {
+  padding: 8px 0;
+}
+
+.permission-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* 表格选中行高亮 */
 :deep(.active-row) {
-  background-color: #ecf5ff !important;
+  background-color: var(--cb-primary-lighter) !important;
+}
+
+:deep(.el-tree) {
+  background: transparent;
+}
+
+:deep(.el-tree-node__content) {
+  height: 36px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+:deep(.el-tree-node__content:hover) {
+  background: var(--cb-primary-lighter);
+}
+
+:deep(.el-divider) {
+  margin: 16px 0;
 }
 </style>

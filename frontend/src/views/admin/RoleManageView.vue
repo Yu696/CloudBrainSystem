@@ -1,53 +1,81 @@
 <template>
   <div class="role-page">
-    <el-row :gutter="20">
+    <div class="page-title">角色管理</div>
+    <el-row :gutter="24">
       <!-- 左侧：用户列表 -->
       <el-col :span="12">
-        <el-card shadow="never">
-          <template #header>
-            <span class="card-title">用户列表</span>
-          </template>
-          <el-table :data="users" border stripe v-loading="userLoading" @row-click="handleUserClick">
-            <el-table-column prop="userName" label="用户名" />
-            <el-table-column prop="realName" label="姓名" />
-            <el-table-column label="当前角色" width="140">
-              <template #default="{ row }">
-                <el-tag v-if="row.role" size="small">{{ row.role }}</el-tag>
-                <el-tag v-else type="info" size="small">未分配</el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
+        <div class="cb-card">
+          <div class="cb-card-header">
+            <el-icon class="header-icon"><UserFilled /></el-icon>
+            <span>用户列表</span>
+            <el-tag size="small" type="info">{{ users.length }} 人</el-tag>
+          </div>
+          <div class="cb-card-body" style="padding: 0">
+            <el-table
+              :data="users"
+              border
+              stripe
+              v-loading="userLoading"
+              @row-click="handleUserClick"
+              :row-class-name="userRowClassName"
+              class="cb-table"
+              height="400"
+            >
+              <el-table-column prop="userName" label="用户名" min-width="100" />
+              <el-table-column prop="realName" label="姓名" min-width="100" />
+              <el-table-column label="当前角色" width="130">
+                <template #default="{ row }">
+                  <el-tag v-if="row.role" size="small" effect="plain">{{ row.role }}</el-tag>
+                  <el-tag v-else type="info" size="small" effect="plain">未分配</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
       </el-col>
 
       <!-- 右侧：分配角色 -->
-      <el-col :span="12">
-        <el-card shadow="never">
-          <template #header>
-            <span class="card-title">分配角色</span>
-          </template>
-          <el-form v-if="selectedUser" label-width="80px">
-            <el-form-item label="用户">
-              <el-input :model-value="selectedUser.realName || selectedUser.userName" disabled />
-            </el-form-item>
-            <el-form-item label="角色">
-              <el-select v-model="selectedRoleId" placeholder="请选择角色" style="width: 100%">
-                <el-option
-                  v-for="role in roles"
-                  :key="role.roleId"
-                  :label="role.roleName"
-                  :value="role.roleId"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="assignLoading" @click="handleAssign">
-                确认分配
-              </el-button>
-            </el-form-item>
-          </el-form>
-          <el-empty v-else description="请从左侧选择用户" />
-        </el-card>
+      <el-col :span="12" class="right-col">
+        <div class="section-header">
+          <el-icon class="header-icon"><Edit /></el-icon>
+          <span>分配角色</span>
+        </div>
+        <div class="cb-card right-card">
+          <div class="cb-card-body">
+            <div v-if="selectedUser" class="assign-form">
+              <div class="assign-target">
+                <el-avatar :size="48" icon="UserFilled" class="assign-avatar" />
+                <div class="assign-user-info">
+                  <span class="assign-username">{{ selectedUser.realName || selectedUser.userName }}</span>
+                  <span class="assign-usertag">@{{ selectedUser.userName }}</span>
+                </div>
+              </div>
+              <el-divider />
+              <el-form label-width="60px">
+                <el-form-item label="角色">
+                  <el-select v-model="selectedRoleId" placeholder="请选择角色" style="width: 100%">
+                    <el-option
+                      v-for="role in roles"
+                      :key="role.roleId"
+                      :label="role.roleName"
+                      :value="role.roleId"
+                    >
+                      <span>{{ role.roleName }}</span>
+                      <span class="role-code">[{{ role.roleCode }}]</span>
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item>
+                  <el-button type="primary" :loading="assignLoading" @click="handleAssign" round>
+                    确认分配
+                  </el-button>
+                  <el-button @click="resetSelection">取消</el-button>
+                </el-form-item>
+              </el-form>
+            </div>
+            <el-empty v-else description="请从左侧选择用户" :image-size="80" />
+          </div>
+        </div>
       </el-col>
     </el-row>
   </div>
@@ -56,6 +84,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { UserFilled, Edit } from '@element-plus/icons-vue'
 import { assignRoleApi, getUserRoleApi, listAllRolesApi } from '@/api/user'
 import type { UserInfoVO } from '@/types/user'
 
@@ -71,8 +100,7 @@ const selectedRoleId = ref('')
 const assignLoading = ref(false)
 
 onMounted(async () => {
-  await loadRoles()
-  await loadUsers()
+  await Promise.all([loadRoles(), loadUsers()])
 })
 
 async function loadRoles() {
@@ -87,7 +115,6 @@ async function loadRoles() {
 async function loadUsers() {
   userLoading.value = true
   try {
-    // 从后端API获取用户列表
     const { listAllUsersApi } = await import('@/api/user')
     const res = await listAllUsersApi()
     users.value = (res.data as any[]) || []
@@ -96,6 +123,10 @@ async function loadUsers() {
   } finally {
     userLoading.value = false
   }
+}
+
+function userRowClassName({ row }: { row: UserRow }) {
+  return selectedUser.value?.userId === row.userId ? 'active-row' : ''
 }
 
 async function handleUserClick(row: UserRow) {
@@ -109,6 +140,11 @@ async function handleUserClick(row: UserRow) {
   } catch {
     selectedRoleId.value = ''
   }
+}
+
+function resetSelection() {
+  selectedUser.value = null
+  selectedRoleId.value = ''
 }
 
 async function handleAssign() {
@@ -137,8 +173,89 @@ async function handleAssign() {
 </script>
 
 <style scoped>
-.card-title {
-  font-size: 16px;
+.role-page {
+  max-width: 1100px;
+}
+
+.header-icon {
+  color: var(--cb-primary);
+  font-size: 18px;
+}
+
+.right-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--cb-font-lg);
   font-weight: 600;
+  color: var(--cb-text-primary);
+  margin-bottom: 16px;
+  padding-left: 2px;
+}
+
+.right-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-card .cb-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* 分配角色表单 */
+.assign-form {
+  padding: 0 4px;
+}
+
+.assign-target {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.assign-avatar {
+  background: linear-gradient(135deg, var(--cb-primary), var(--cb-primary-light)) !important;
+  flex-shrink: 0;
+}
+
+.assign-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assign-username {
+  font-size: var(--cb-font-lg);
+  font-weight: 600;
+  color: var(--cb-text-primary);
+}
+
+.assign-usertag {
+  font-size: var(--cb-font-xs);
+  color: var(--cb-text-placeholder);
+}
+
+.role-code {
+  color: var(--cb-text-placeholder);
+  font-size: var(--cb-font-xs);
+  margin-left: 6px;
+}
+
+/* 表格选中行高亮 */
+:deep(.active-row) {
+  background-color: var(--cb-primary-lighter) !important;
+}
+
+:deep(.el-divider) {
+  margin: 20px 0;
 }
 </style>
