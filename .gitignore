@@ -29,3 +29,5 @@ logs/
 .env.local
 *.yml.bak
 *.properties.bak
+
+docker-compose.yml
