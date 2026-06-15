@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "用户中心")
@@ -53,6 +54,13 @@ public class UserController extends BaseController {
     public Result<String> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         userService.resetPassword(request);
         return success("重置成功");
+    }
+
+    /** 获取所有用户列表（含角色信息，仅管理员） */
+    @Operation(summary = "用户列表")
+    @GetMapping("/list-all")
+    public Result<List<UserInfoVO>> listAll() {
+        return success(userService.listAllUsers());
     }
 
     /** 用户注册，返回用户 ID */

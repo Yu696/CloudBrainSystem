@@ -7,6 +7,8 @@ import com.cloudbrain.dto.request.UserUpdateRequest;
 import com.cloudbrain.dto.response.LoginResponse;
 import com.cloudbrain.dto.response.UserInfoVO;
 
+import java.util.List;
+
 public interface UserService {
 
     /** 用户登录，验证账号密码，返回 JWT Token 和用户信息 */
@@ -23,4 +25,7 @@ public interface UserService {
 
     /** 用户注册，校验用户名唯一性，返回用户 ID */
     String register(RegisterRequest request);
+
+    /** 获取所有用户列表（含角色信息，仅管理员） */
+    List<UserInfoVO> listAllUsers();
 }

@@ -16,6 +16,8 @@ import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.mapper.UserRoleMapper;
 import com.cloudbrain.service.user.RoleService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,10 +33,31 @@ public class RoleServiceImpl implements RoleService {
     private final UserRoleMapper userRoleMapper;
     private final RolePermissionMapper rolePermissionMapper;
 
-    /** 为用户分配角色，校验用户、角色存在性及重复分配 */
+    /** 获取所有角色列表 */
+    @Override
+    public List<Role> listAllRoles() {
+        return roleMapper.selectList(new LambdaQueryWrapper<Role>()
+                .orderByAsc(Role::getCreateTime));
+    }
+
+    /** 校验当前登录用户是否为管理员 */
+    private void checkAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new BusinessException("未登录");
+        }
+        User user = (User) auth.getPrincipal();
+        // 通过 userType 判断（1=管理员）
+        if (user.getUserType() == null || user.getUserType() != 1) {
+            throw new BusinessException("无操作权限，仅管理员可执行此操作");
+        }
+    }
+
+    /** 为用户分配角色，校验用户、角色存在性及重复分配（仅管理员） */
     @Override
     @Transactional
     public void assignRole(RoleAssignRequest request) {
+        checkAdmin();
         // 校验用户存在
         if (userMapper.selectCount(new LambdaQueryWrapper<User>()
                 .eq(User::getUserId, request.getUserId())) == 0) {
@@ -76,26 +99,27 @@ public class RoleServiceImpl implements RoleService {
                         .orderByAsc(Permission::getSortOrder));
     }
 
-    /** 查询指定用户的角色信息 */
+    /** 查询指定用户的角色信息（返回第一个角色） */
     @Override
     public Role getUserRole(String userId) {
-        UserRole userRole = userRoleMapper.selectOne(
+        List<UserRole> userRoles = userRoleMapper.selectList(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
-        if (userRole == null) {
+        if (userRoles.isEmpty()) {
             throw new BusinessException("该用户未分配角色");
         }
         Role role = roleMapper.selectOne(
-                new LambdaQueryWrapper<Role>().eq(Role::getRoleId, userRole.getRoleId()));
+                new LambdaQueryWrapper<Role>().eq(Role::getRoleId, userRoles.get(0).getRoleId()));
         if (role == null) {
             throw new BusinessException("角色不存在");
         }
         return role;
     }
 
-    /** 更新角色权限配置，先清空原权限再批量插入新权限 */
+    /** 更新角色权限配置，先清空原权限再批量插入新权限（仅管理员） */
     @Override
     @Transactional
     public void updatePermission(PermissionUpdateRequest request) {
+        checkAdmin();
         rolePermissionMapper.delete(
                 new LambdaQueryWrapper<RolePermission>()
                         .eq(RolePermission::getRoleId, request.getRoleId()));

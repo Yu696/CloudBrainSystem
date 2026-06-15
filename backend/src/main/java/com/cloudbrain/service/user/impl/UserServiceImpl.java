@@ -26,6 +26,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -111,6 +114,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return user.getUserId();
     }
 
+    /** 获取所有用户列表（含角色信息，仅管理员） */
+    @Override
+    public List<UserInfoVO> listAllUsers() {
+        // 校验管理员权限
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new BusinessException("未登录");
+        }
+        User current = (User) auth.getPrincipal();
+        if (current.getUserType() == null || current.getUserType() != 1) {
+            throw new BusinessException("无操作权限，仅管理员可执行此操作");
+        }
+
+        List<User> users = lambdaQuery().orderByAsc(User::getCreateTime).list();
+        return users.stream().map(this::buildUserInfo).toList();
+    }
+
     /** 获取当前用户实体（含密码，仅内部使用） */
     private User getRawUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -120,17 +140,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return (User) authentication.getPrincipal();
     }
 
-    /** 构建带角色信息的用户 VO */
+    /** 构建带角色信息的用户 VO（支持多角色，用逗号分隔） */
     private UserInfoVO buildUserInfo(User user) {
         String roleName = null;
-        UserRole userRole = userRoleMapper.selectOne(
+        List<UserRole> userRoles = userRoleMapper.selectList(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, user.getUserId()));
-        if (userRole != null) {
-            Role role = roleMapper.selectOne(
-                    new LambdaQueryWrapper<Role>().eq(Role::getRoleId, userRole.getRoleId()));
-            if (role != null) {
-                roleName = role.getRoleName();
-            }
+        if (!userRoles.isEmpty()) {
+            roleName = userRoles.stream()
+                    .map(ur -> {
+                        Role role = roleMapper.selectOne(
+                                new LambdaQueryWrapper<Role>().eq(Role::getRoleId, ur.getRoleId()));
+                        return role != null ? role.getRoleName() : null;
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining(", "));
         }
 
         return UserInfoVO.builder()

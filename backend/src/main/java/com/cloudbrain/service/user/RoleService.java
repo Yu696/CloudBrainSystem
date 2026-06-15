@@ -9,7 +9,10 @@ import java.util.List;
 
 public interface RoleService {
 
-    /** 为用户分配角色，校验用户、角色存在且未重复分配 */
+    /** 获取所有角色列表 */
+    List<Role> listAllRoles();
+
+    /** 为用户分配角色，校验用户、角色存在且未重复分配（仅管理员） */
     void assignRole(RoleAssignRequest request);
 
     /** 查询指定角色的权限列表 */
@@ -18,6 +21,6 @@ public interface RoleService {
     /** 查询指定用户的角色信息 */
     Role getUserRole(String userId);
 
-    /** 更新角色权限配置（先清后插） */
+    /** 更新角色权限配置（先清后插，仅管理员） */
     void updatePermission(PermissionUpdateRequest request);
 }

@@ -23,6 +23,13 @@ public class RoleController extends BaseController {
 
     private final RoleService roleService;
 
+    /** 获取所有角色列表 */
+    @Operation(summary = "角色列表")
+    @GetMapping("/list")
+    public Result<List<Role>> list() {
+        return success(roleService.listAllRoles());
+    }
+
     /** 为用户分配角色，需校验用户和角色存在且未重复分配 */
     @Operation(summary = "分配角色")
     @PostMapping("/assign")
@@ -34,7 +41,7 @@ public class RoleController extends BaseController {
     /** 查询指定角色的权限列表，按排序字段升序返回 */
     @Operation(summary = "查询角色权限")
     @GetMapping("/permissions")
-    public Result<List<Permission>> permissions(@RequestParam(required = false) String roleId) {
+    public Result<List<Permission>> permissions(@RequestParam String roleId) {
         return success(roleService.getPermissions(roleId));
     }
 
