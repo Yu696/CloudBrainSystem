@@ -27,8 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -111,6 +109,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setStatus(1);
         save(user);
 
+        // 自动分配默认角色
+        String defaultRoleId = switch (user.getUserType()) {
+            case 1 -> "ROLE_ADMIN";
+            case 0 -> "ROLE_DOCTOR";
+            case 2 -> "ROLE_PATIENT";
+            default -> "ROLE_PATIENT";
+        };
+        UserRole userRole = new UserRole();
+        userRole.setUserId(user.getUserId());
+        userRole.setRoleId(defaultRoleId);
+        userRoleMapper.insert(userRole);
+
         return user.getUserId();
     }
 
@@ -140,20 +150,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return (User) authentication.getPrincipal();
     }
 
-    /** 构建带角色信息的用户 VO（支持多角色，用逗号分隔） */
+    /** 构建带角色信息的用户 VO（一个用户只有一个角色） */
     private UserInfoVO buildUserInfo(User user) {
         String roleName = null;
         List<UserRole> userRoles = userRoleMapper.selectList(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, user.getUserId()));
         if (!userRoles.isEmpty()) {
-            roleName = userRoles.stream()
-                    .map(ur -> {
-                        Role role = roleMapper.selectOne(
-                                new LambdaQueryWrapper<Role>().eq(Role::getRoleId, ur.getRoleId()));
-                        return role != null ? role.getRoleName() : null;
-                    })
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.joining(", "));
+            Role role = roleMapper.selectOne(
+                    new LambdaQueryWrapper<Role>().eq(Role::getRoleId, userRoles.get(0).getRoleId()));
+            roleName = role != null ? role.getRoleName() : null;
         }
 
         return UserInfoVO.builder()

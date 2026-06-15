@@ -53,32 +53,48 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    /** 为用户分配角色，校验用户、角色存在性及重复分配（仅管理员） */
+    /** 为用户分配角色，一个用户只能有一个角色（仅管理员） */
     @Override
     @Transactional
     public void assignRole(RoleAssignRequest request) {
         checkAdmin();
-        // 校验用户存在
-        if (userMapper.selectCount(new LambdaQueryWrapper<User>()
-                .eq(User::getUserId, request.getUserId())) == 0) {
+        // 校验用户存在并获取用户对象
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getUserId, request.getUserId()));
+        if (user == null) {
             throw new BusinessException("用户不存在");
         }
-        // 校验角色存在
-        if (roleMapper.selectCount(new LambdaQueryWrapper<Role>()
-                .eq(Role::getRoleId, request.getRoleId())) == 0) {
+        // 校验角色存在并获取角色对象
+        Role role = roleMapper.selectOne(new LambdaQueryWrapper<Role>()
+                .eq(Role::getRoleId, request.getRoleId()));
+        if (role == null) {
             throw new BusinessException("角色不存在");
         }
-        // 校验重复分配
-        if (userRoleMapper.selectCount(new LambdaQueryWrapper<UserRole>()
-                .eq(UserRole::getUserId, request.getUserId())
-                .eq(UserRole::getRoleId, request.getRoleId())) > 0) {
-            throw new BusinessException("该用户已拥有此角色");
-        }
 
+        // 删除用户原有角色（一个用户只能有一个角色）
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
+                .eq(UserRole::getUserId, request.getUserId()));
+
+        // 分配新角色
         UserRole userRole = new UserRole();
         userRole.setUserId(request.getUserId());
         userRole.setRoleId(request.getRoleId());
         userRoleMapper.insert(userRole);
+
+        // 同步更新 userType
+        user.setUserType(mapRoleToUserType(role));
+        userMapper.updateById(user);
+    }
+
+    /** 根据角色编码映射 userType：admin=1, doctor=0, patient=2 */
+    private Integer mapRoleToUserType(Role role) {
+        if (role == null) return 2;
+        return switch (role.getRoleCode()) {
+            case "admin" -> 1;
+            case "doctor" -> 0;
+            case "patient" -> 2;
+            default -> 2;
+        };
     }
 
     /** 查询指定角色的权限列表，按排序字段升序返回 */
