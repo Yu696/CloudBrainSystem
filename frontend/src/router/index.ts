@@ -44,6 +44,25 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/PermissionView.vue'),
         meta: { title: '权限管理', admin: true }
       },
+      // M02 患者档案
+      {
+        path: 'patient/create',
+        name: 'PatientCreate',
+        component: () => import('@/views/patient/PatientCreateView.vue'),
+        meta: { title: '新建档案' }
+      },
+      {
+        path: 'patient/list',
+        name: 'PatientList',
+        component: () => import('@/views/patient/PatientListView.vue'),
+        meta: { title: '患者列表' }
+      },
+      {
+        path: 'patient/detail/:id',
+        name: 'PatientDetail',
+        component: () => import('@/views/patient/PatientDetailView.vue'),
+        meta: { title: '档案详情' }
+      },
       // M06 预约管理
       {
         path: 'appointment/dept',

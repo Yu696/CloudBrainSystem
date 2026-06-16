@@ -29,6 +29,22 @@
           <template #title>个人信息</template>
         </el-menu-item>
 
+        <!-- 患者档案 -->
+        <el-sub-menu index="patient">
+          <template #title>
+            <el-icon><UserFilled /></el-icon>
+            <span>患者档案</span>
+          </template>
+          <el-menu-item index="/patient/list">
+            <el-icon><List /></el-icon>
+            <template #title>患者列表</template>
+          </el-menu-item>
+          <el-menu-item index="/patient/create">
+            <el-icon><Plus /></el-icon>
+            <template #title>新建档案</template>
+          </el-menu-item>
+        </el-sub-menu>
+
         <!-- 预约挂号 -->
         <el-sub-menu index="appointment">
           <template #title>
