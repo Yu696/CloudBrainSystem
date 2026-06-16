@@ -36,6 +36,10 @@ public class UUIDUtil {
         return "PAT_" + shortUuid();
     }
 
+    public static String generateMedicalRecordNo() {
+        return "MRN_" + shortUuid();
+    }
+
     private static String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
