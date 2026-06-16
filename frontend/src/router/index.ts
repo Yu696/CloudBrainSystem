@@ -43,6 +43,43 @@ const routes: RouteRecordRaw[] = [
         name: 'Permission',
         component: () => import('@/views/admin/PermissionView.vue'),
         meta: { title: '权限管理', admin: true }
+      },
+      // M06 预约管理
+      {
+        path: 'appointment/dept',
+        name: 'DeptSelect',
+        component: () => import('@/views/appointment/DeptSelectView.vue'),
+        meta: { title: '科室选择' }
+      },
+      {
+        path: 'appointment/doctor',
+        name: 'DoctorSelect',
+        component: () => import('@/views/appointment/DoctorSelectView.vue'),
+        meta: { title: '医生选择' }
+      },
+      {
+        path: 'appointment/confirm',
+        name: 'AppointmentConfirm',
+        component: () => import('@/views/appointment/AppointmentConfirmView.vue'),
+        meta: { title: '预约确认' }
+      },
+      {
+        path: 'appointment/pay/:id',
+        name: 'Payment',
+        component: () => import('@/views/appointment/PaymentView.vue'),
+        meta: { title: '支付' }
+      },
+      {
+        path: 'appointment/records',
+        name: 'AppointmentList',
+        component: () => import('@/views/appointment/AppointmentListView.vue'),
+        meta: { title: '挂号记录' }
+      },
+      {
+        path: 'admin/schedule',
+        name: 'ScheduleManage',
+        component: () => import('@/views/appointment/ScheduleManageView.vue'),
+        meta: { title: '排班管理', admin: true }
       }
     ]
   }
