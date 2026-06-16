@@ -31,3 +31,4 @@ logs/
 *.properties.bak
 
 docker-compose.yml
+docs/
