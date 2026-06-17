@@ -7,10 +7,12 @@ import com.cloudbrain.dto.request.SystemUserAddRequest;
 import com.cloudbrain.dto.request.SystemUserStatusRequest;
 import com.cloudbrain.dto.request.SystemUserUpdateRequest;
 import com.cloudbrain.dto.response.SystemUserVO;
+import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.Role;
 import com.cloudbrain.entity.SystemUser;
 import com.cloudbrain.entity.User;
 import com.cloudbrain.entity.UserRole;
+import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.RoleMapper;
 import com.cloudbrain.mapper.SystemUserMapper;
 import com.cloudbrain.mapper.UserMapper;
@@ -34,6 +36,7 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
     private final SystemUserMapper systemUserMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
+    private final DoctorMapper doctorMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -47,21 +50,24 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
             throw new BusinessException("用户名已存在");
         }
 
+        // 查询角色
+        Role role = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getRoleId, request.getRoleId()));
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
+
         // 创建 user 记录
         User user = new User();
         user.setUserId(UUIDUtil.generateUserId());
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRealName(request.getUsername());
-        user.setUserType(1);
+        user.setUserType(mapRoleCodeToUserType(role.getRoleCode()));
         user.setStatus(1);
         userMapper.insert(user);
 
-        // 创建 system_user 记录
-        SystemUser systemUser = new SystemUser();
-        systemUser.setUserId(user.getUserId());
-        systemUser.setAdminType(0);
-        systemUserMapper.insert(systemUser);
+        // 根据角色创建对应的专业表记录
+        createSpecializedRecord(role.getRoleCode(), user.getUserId());
 
         // 创建 user_role 关联
         UserRole userRole = new UserRole();
@@ -70,6 +76,36 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
         userRoleMapper.insert(userRole);
 
         return user.getUserId();
+    }
+
+    /** 根据角色编码创建对应的专业表记录 */
+    private void createSpecializedRecord(String roleCode, String userId) {
+        switch (roleCode) {
+            case "admin" -> {
+                SystemUser su = new SystemUser();
+                su.setUserId(userId);
+                su.setAdminType(0);
+                systemUserMapper.insert(su);
+            }
+            case "doctor" -> {
+                Doctor doctor = new Doctor();
+                doctor.setDoctorId(UUIDUtil.generateDoctorId());
+                doctor.setUserId(userId);
+                doctor.setDepartmentId("0");
+                doctorMapper.insert(doctor);
+            }
+            // patient 无需创建额外记录
+        }
+    }
+
+    /** 角色编码 → userType */
+    private Integer mapRoleCodeToUserType(String roleCode) {
+        return switch (roleCode) {
+            case "admin" -> 1;
+            case "doctor" -> 0;
+            case "patient" -> 2;
+            default -> 2;
+        };
     }
 
     @Override

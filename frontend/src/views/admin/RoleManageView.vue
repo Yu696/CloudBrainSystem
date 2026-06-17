@@ -65,6 +65,26 @@
                     </el-option>
                   </el-select>
                 </el-form-item>
+                <el-form-item v-if="isDoctorRole" label="科室">
+                  <el-select v-model="selectedDepartmentId" placeholder="请选择科室" clearable style="width: 100%">
+                    <el-option
+                      v-for="dept in departments"
+                      :key="dept.departmentId"
+                      :label="dept.name"
+                      :value="dept.departmentId"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item v-if="isDoctorRole" label="职位">
+                  <el-select v-model="selectedTitle" placeholder="请选择职位" style="width: 100%">
+                    <el-option
+                      v-for="t in titles"
+                      :key="t"
+                      :label="t"
+                      :value="t"
+                    />
+                  </el-select>
+                </el-form-item>
                 <el-form-item>
                   <el-button type="primary" :loading="assignLoading" @click="handleAssign" round>
                     确认分配
@@ -82,10 +102,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UserFilled, Edit } from '@element-plus/icons-vue'
 import { assignRoleApi, getUserRoleApi, listAllRolesApi } from '@/api/user'
+import { listDepartmentsApi } from '@/api/appointment'
 import type { UserInfoVO } from '@/types/user'
 
 interface UserRow extends UserInfoVO {
@@ -94,14 +115,33 @@ interface UserRow extends UserInfoVO {
 
 const users = ref<UserRow[]>([])
 const roles = ref<any[]>([])
+const departments = ref<{ departmentId: string; name: string }[]>([])
 const userLoading = ref(false)
 const selectedUser = ref<UserRow | null>(null)
 const selectedRoleId = ref('')
+const selectedDepartmentId = ref('')
+const selectedTitle = ref('')
 const assignLoading = ref(false)
 
-onMounted(async () => {
-  await Promise.all([loadRoles(), loadUsers()])
+const titles = ['主任医师', '副主任医师', '主治医师', '住院医师', '主任药师', '副主任药师']
+
+const isDoctorRole = computed(() => {
+  const role = roles.value.find(r => r.roleId === selectedRoleId.value)
+  return role?.roleCode === 'doctor'
 })
+
+onMounted(async () => {
+  await Promise.all([loadRoles(), loadUsers(), loadDepartments()])
+})
+
+async function loadDepartments() {
+  try {
+    const res = await listDepartmentsApi()
+    departments.value = (res.data as any[]) || []
+  } catch {
+    departments.value = []
+  }
+}
 
 async function loadRoles() {
   try {
@@ -132,6 +172,8 @@ function userRowClassName({ row }: { row: UserRow }) {
 async function handleUserClick(row: UserRow) {
   selectedUser.value = row
   selectedRoleId.value = ''
+  selectedDepartmentId.value = ''
+  selectedTitle.value = ''
 
   try {
     const res = await getUserRoleApi(row.userId)
@@ -145,6 +187,8 @@ async function handleUserClick(row: UserRow) {
 function resetSelection() {
   selectedUser.value = null
   selectedRoleId.value = ''
+  selectedDepartmentId.value = ''
+  selectedTitle.value = ''
 }
 
 async function handleAssign() {
@@ -157,7 +201,9 @@ async function handleAssign() {
   try {
     await assignRoleApi({
       userId: selectedUser.value.userId,
-      roleId: selectedRoleId.value
+      roleId: selectedRoleId.value,
+      departmentId: isDoctorRole.value && selectedDepartmentId.value ? selectedDepartmentId.value : undefined,
+      title: isDoctorRole.value && selectedTitle.value ? selectedTitle.value : undefined
     })
     ElMessage.success('分配成功')
     const role = roles.value.find(r => r.roleId === selectedRoleId.value)

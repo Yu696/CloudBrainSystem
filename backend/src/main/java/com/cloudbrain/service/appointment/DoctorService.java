@@ -1,10 +1,10 @@
 package com.cloudbrain.service.appointment;
 
-import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.dto.response.DoctorVO;
 import java.util.List;
 
 public interface DoctorService {
-    List<Doctor> listByDepartment(String departmentId);
-    List<Doctor> listAll();
-    Doctor getDetail(String doctorId);
+    List<DoctorVO> listByDepartment(String departmentId);
+    List<DoctorVO> listAll();
+    DoctorVO getDetail(String doctorId);
 }

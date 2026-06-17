@@ -39,6 +39,14 @@
             <div v-if="currentRole" class="permission-content">
               <div class="permission-hint">
                 <el-alert
+                  v-if="isSuperAdmin"
+                  title="超级管理员拥有全部权限，不可修改"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+                />
+                <el-alert
+                  v-else
                   :title="`为角色「${currentRole.roleName}」配置可访问的权限`"
                   type="info"
                   :closable="false"
@@ -52,19 +60,19 @@
                 show-checkbox
                 node-key="permissionId"
                 default-expand-all
-                :props="{ label: 'permissionName', children: 'children' }"
+                :props="{ label: 'permissionName', children: 'children', disabled: 'disabled' }"
                 class="permission-tree"
               />
               <el-divider />
               <div class="permission-actions">
-                <el-button type="primary" :loading="saveLoading" @click="handleSave" round>
+                <el-button type="primary" :loading="saveLoading" :disabled="isSuperAdmin" @click="handleSave" round>
                   保存权限
                 </el-button>
-                <el-button @click="handleRefresh" :disabled="!currentRole">
+                <el-button @click="handleRefresh" :disabled="!currentRole || isSuperAdmin">
                   重置
                 </el-button>
-                <el-button text @click="handleCheckAll" v-if="!allChecked">全选</el-button>
-                <el-button text @click="handleUncheckAll" v-if="allChecked">取消全选</el-button>
+                <el-button v-if="!isSuperAdmin" text @click="handleCheckAll" v-show="!allChecked">全选</el-button>
+                <el-button v-if="!isSuperAdmin" text @click="handleUncheckAll" v-show="allChecked">取消全选</el-button>
               </div>
             </div>
             <el-empty v-else description="请从左侧选择角色" :image-size="80" />
@@ -76,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import { UserFilled, Key } from '@element-plus/icons-vue'
@@ -100,6 +108,8 @@ const saveLoading = ref(false)
 const currentRole = ref<RoleItem | null>(null)
 const treeRef = ref<InstanceType<typeof ElTree>>()
 const allChecked = ref(false)
+
+const isSuperAdmin = computed(() => currentRole.value?.roleCode === 'admin')
 
 function activeRowClass({ row }: { row: RoleItem }) {
   return currentRole.value?.roleId === row.roleId ? 'active-row' : ''
@@ -177,6 +187,20 @@ async function handleRoleClick(role: RoleItem) {
   currentRole.value = role
   allChecked.value = false
 
+  // 超级管理员：禁用所有节点，默认全选
+  if (role.roleCode === 'admin') {
+    permissionTree.value = addDisabledToTree(mockPermissions, true)
+    const allIds = getAllNodeIds(mockPermissions)
+    setTimeout(() => {
+      treeRef.value?.setCheckedKeys(allIds)
+    }, 50)
+    allChecked.value = true
+    return
+  }
+
+  // 普通角色：取消禁用，加载已分配的权限
+  permissionTree.value = addDisabledToTree(mockPermissions, false)
+
   try {
     const res = await getPermissionsApi(role.roleId)
     const perms = res.data as Permission[]
@@ -187,6 +211,14 @@ async function handleRoleClick(role: RoleItem) {
   } catch {
     treeRef.value?.setCheckedKeys([])
   }
+}
+
+function addDisabledToTree(nodes: PermissionNode[], disabled: boolean): PermissionNode[] {
+  return nodes.map(node => ({
+    ...node,
+    disabled,
+    children: node.children ? addDisabledToTree(node.children, disabled) : []
+  }))
 }
 
 async function handleSave() {

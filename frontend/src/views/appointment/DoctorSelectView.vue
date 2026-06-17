@@ -22,7 +22,7 @@
               <el-avatar :size="56" class="doc-avatar">{{ doc.title?.[0] || '医' }}</el-avatar>
             </div>
             <div class="doc-info">
-              <div class="doc-name">{{ doc.title || '医生' }}</div>
+              <div class="doc-name">{{ doc.realName || doc.title || '医生' }}</div>
               <div class="doc-title-row">
                 <el-tag size="small" effect="plain">{{ doc.title || '医师' }}</el-tag>
                 <span class="doc-fee">{{ doc.consultationFee ? '¥' + doc.consultationFee : '免费' }}</span>
@@ -98,7 +98,7 @@
               <div class="selected-info">
                 <div class="selected-row">
                   <span class="selected-label">医生</span>
-                  <span class="selected-value">{{ selectedDoctor.title || '医生' }}</span>
+                  <span class="selected-value">{{ selectedDoctor.title ? selectedDoctor.title + ' - ' + selectedDoctor.realName : (selectedDoctor.realName || '医生') }}</span>
                 </div>
                 <div class="selected-row">
                   <span class="selected-label">日期</span>
@@ -131,6 +131,7 @@ interface Doctor {
   doctorId: string
   userId: string
   departmentId: string
+  realName: string
   title: string
   specialty: string
   introduction: string

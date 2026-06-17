@@ -39,7 +39,7 @@ export function listAllRolesApi() {
 }
 
 /** 分配角色 */
-export function assignRoleApi(data: { userId: string; roleId: string }) {
+export function assignRoleApi(data: { userId: string; roleId: string; departmentId?: string; title?: string }) {
   return request.post<string>('/role/assign', data)
 }
 
