@@ -16,6 +16,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '注册', noAuth: true }
   },
   {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: () => import('@/views/admin/AdminLoginView.vue'),
+    meta: { title: '管理员登录', noAuth: true }
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/dashboard',
@@ -43,6 +49,18 @@ const routes: RouteRecordRaw[] = [
         name: 'Permission',
         component: () => import('@/views/admin/PermissionView.vue'),
         meta: { title: '权限管理', admin: true }
+      },
+      {
+        path: 'admin/users',
+        name: 'UserManage',
+        component: () => import('@/views/admin/UserManageView.vue'),
+        meta: { title: '用户管理', admin: true }
+      },
+      {
+        path: 'admin/users/add',
+        name: 'UserAdd',
+        component: () => import('@/views/admin/UserAddView.vue'),
+        meta: { title: '新增用户', admin: true }
       },
       // M02 患者档案
       {

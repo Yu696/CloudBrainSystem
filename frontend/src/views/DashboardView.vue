@@ -86,8 +86,12 @@
                 <el-icon><List /></el-icon>
                 <span>挂号记录</span>
               </el-button>
-              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/role')">
+              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/users')">
                 <el-icon><UserFilled /></el-icon>
+                <span>用户管理</span>
+              </el-button>
+              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/role')">
+                <el-icon><User /></el-icon>
                 <span>角色管理</span>
               </el-button>
             </div>
