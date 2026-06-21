@@ -1,0 +1,56 @@
+package com.cloudbrain.controller.medical;
+
+import com.cloudbrain.common.BaseController;
+import com.cloudbrain.common.Result;
+import com.cloudbrain.dto.request.ExaminationOrderCreateRequest;
+import com.cloudbrain.dto.response.ExaminationOrderVO;
+import com.cloudbrain.dto.response.ExaminationResultVO;
+import com.cloudbrain.service.medical.ExaminationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@Tag(name = "诊疗记录 - 检查管理")
+@RestController
+@RequestMapping("/api/examination")
+@RequiredArgsConstructor
+public class ExaminationController extends BaseController {
+
+    private final ExaminationService examinationService;
+
+    @Operation(summary = "开检查单")
+    @PostMapping("/create")
+    public Result<ExaminationOrderVO> create(@Valid @RequestBody ExaminationOrderCreateRequest request) {
+        return success(examinationService.createOrder(request));
+    }
+
+    @Operation(summary = "检查单列表")
+    @GetMapping("/list")
+    public Result<List<ExaminationOrderVO>> list(@RequestParam String recordId) {
+        return success(examinationService.listOrders(recordId));
+    }
+
+    @Operation(summary = "更新检查单")
+    @PutMapping("/update")
+    public Result<ExaminationOrderVO> update(@RequestParam String orderId,
+                                              @Valid @RequestBody ExaminationOrderCreateRequest request) {
+        return success(examinationService.updateOrder(orderId, request));
+    }
+
+    @Operation(summary = "删除检查单")
+    @DeleteMapping("/delete")
+    public Result<String> delete(@RequestParam String orderId) {
+        examinationService.deleteOrder(orderId);
+        return success("删除成功");
+    }
+
+    @Operation(summary = "检查结果")
+    @GetMapping("/result")
+    public Result<ExaminationResultVO> result(@RequestParam String orderId) {
+        return success(examinationService.getResult(orderId));
+    }
+}
