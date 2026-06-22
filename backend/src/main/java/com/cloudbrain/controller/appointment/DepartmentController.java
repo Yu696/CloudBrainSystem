@@ -2,15 +2,14 @@ package com.cloudbrain.controller.appointment;
 
 import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
+import com.cloudbrain.dto.request.DepartmentCreateRequest;
 import com.cloudbrain.entity.Department;
 import com.cloudbrain.service.appointment.DepartmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -29,5 +28,26 @@ public class DepartmentController extends BaseController {
             return success(departmentService.listByCategory(category));
         }
         return success(departmentService.listAll());
+    }
+
+    @Operation(summary = "新增科室")
+    @PostMapping("/create")
+    public Result<Department> create(@Valid @RequestBody DepartmentCreateRequest request) {
+        return success(departmentService.create(request));
+    }
+
+    @Operation(summary = "更新科室")
+    @PutMapping("/update")
+    public Result<String> update(@RequestParam String departmentId,
+                                  @Valid @RequestBody DepartmentCreateRequest request) {
+        departmentService.update(departmentId, request);
+        return success("更新成功");
+    }
+
+    @Operation(summary = "删除科室")
+    @DeleteMapping("/delete")
+    public Result<String> delete(@RequestParam String departmentId) {
+        departmentService.delete(departmentId);
+        return success("删除成功");
     }
 }

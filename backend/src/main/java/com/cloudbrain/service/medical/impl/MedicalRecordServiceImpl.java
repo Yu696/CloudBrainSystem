@@ -2,14 +2,21 @@ package com.cloudbrain.service.medical.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.MedicalRecordCreateRequest;
 import com.cloudbrain.dto.request.MedicalRecordUpdateRequest;
 import com.cloudbrain.dto.response.MedicalRecordVO;
 import com.cloudbrain.entity.MedicalRecord;
 import com.cloudbrain.entity.Appointment;
+import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.entity.Patient;
+import com.cloudbrain.entity.User;
 import com.cloudbrain.mapper.AppointmentMapper;
+import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.MedicalRecordMapper;
+import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.service.medical.MedicalRecordService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +31,9 @@ import java.util.List;
 public class MedicalRecordServiceImpl extends ServiceImpl<MedicalRecordMapper, MedicalRecord> implements MedicalRecordService {
 
     private final AppointmentMapper appointmentMapper;
+    private final PatientMapper patientMapper;
+    private final DoctorMapper doctorMapper;
+    private final UserMapper userMapper;
 
     @Override
     @Transactional
@@ -57,8 +67,28 @@ public class MedicalRecordServiceImpl extends ServiceImpl<MedicalRecordMapper, M
                 .orderByDesc(MedicalRecord::getCreateTime);
 
         return this.list(wrapper).stream()
-                .map(MedicalRecordVO::from)
+                .map(this::enrichNames)
                 .toList();
+    }
+
+    private MedicalRecordVO enrichNames(MedicalRecord r) {
+        MedicalRecordVO vo = MedicalRecordVO.from(r);
+
+        if (r.getPatientId() != null) {
+            Patient p = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, r.getPatientId()));
+            if (p != null) vo.setPatientName(p.getName());
+        }
+        if (r.getDoctorId() != null) {
+            Doctor d = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, r.getDoctorId()));
+            if (d != null && d.getUserId() != null) {
+                User u = userMapper.selectOne(
+                        new LambdaQueryWrapper<User>().eq(User::getUserId, d.getUserId()));
+                if (u != null) vo.setDoctorName(u.getRealName());
+            }
+        }
+        return vo;
     }
 
     @Override
@@ -114,5 +144,16 @@ public class MedicalRecordServiceImpl extends ServiceImpl<MedicalRecordMapper, M
                 appointmentMapper.updateById(apt);
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public void deleteRecord(String recordId) {
+        MedicalRecord record = this.getOne(new LambdaQueryWrapper<MedicalRecord>()
+                .eq(MedicalRecord::getRecordId, recordId));
+        if (record == null) {
+            throw new BusinessException("病历不存在");
+        }
+        this.removeById(record.getId());
     }
 }

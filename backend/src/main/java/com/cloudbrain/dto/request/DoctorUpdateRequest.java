@@ -1,21 +1,14 @@
-package com.cloudbrain.dto.response;
+package com.cloudbrain.dto.request;
 
-import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
 
 @Data
-@Builder
-public class DoctorVO {
-    private String doctorId;
-    private String userId;
+public class DoctorUpdateRequest {
     private String departmentId;
-    private String departmentName;
-    private String realName;
     private String title;
     private String specialty;
     private String introduction;
     private BigDecimal consultationFee;
     private Integer maxDailyPatients;
-    private Integer available;
 }

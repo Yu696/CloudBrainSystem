@@ -11,7 +11,9 @@ public class MedicalRecordVO {
 
     private String recordId;
     private String patientId;
+    private String patientName;
     private String doctorId;
+    private String doctorName;
     private String appointmentId;
     private String chiefComplaint;
     private String presentIllness;

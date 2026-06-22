@@ -103,10 +103,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, UserFilled, Document, TrendCharts, Calendar, List } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { getDashboardStatsApi } from '@/api/appointment'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -124,12 +125,25 @@ const roleText = computed(() => {
   return '患者'
 })
 
-const stats = [
+const stats = ref([
   { label: '今日挂号', value: 0, icon: Document },
   { label: '待诊人数', value: 0, icon: User },
   { label: '本月新患', value: 0, icon: TrendCharts },
   { label: '待处理', value: 0, icon: UserFilled }
-]
+])
+
+onMounted(async () => {
+  try {
+    const res = await getDashboardStatsApi()
+    const data = res.data
+    stats.value[0].value = data.todayAppointments
+    stats.value[1].value = data.waitingCount
+    stats.value[2].value = data.monthNewPatients
+    stats.value[3].value = data.pendingCount
+  } catch {
+    // keep default zeros
+  }
+})
 </script>
 
 <style scoped>
