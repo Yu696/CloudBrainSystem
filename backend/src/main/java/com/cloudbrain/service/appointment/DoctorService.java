@@ -7,4 +7,6 @@ public interface DoctorService {
     List<DoctorVO> listByDepartment(String departmentId);
     List<DoctorVO> listAll();
     DoctorVO getDetail(String doctorId);
+    /** 获取当前登录医生信息 */
+    DoctorVO getCurrentDoctor();
 }

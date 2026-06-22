@@ -34,3 +34,8 @@ export function updatePatientApi(data: { patientId: string; [key: string]: any }
 export function checkIdCardApi(idCard: string) {
   return request.get<{ exists: boolean }>('/patient/check-idcard', { params: { idCard } })
 }
+
+/** 根据登录用户ID查找患者档案 */
+export function findPatientByUserIdApi(userId: string) {
+  return request.get<any>('/patient/find-by-user', { params: { userId } })
+}

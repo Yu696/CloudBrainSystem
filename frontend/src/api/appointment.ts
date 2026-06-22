@@ -15,6 +15,11 @@ export function getDoctorDetailApi(doctorId: string) {
   return request.get<any>('/doctor/detail', { params: { doctorId } })
 }
 
+/** 当前登录医生信息 */
+export function getMyDoctorInfoApi() {
+  return request.get<any>('/doctor/me')
+}
+
 /** 设置排班 */
 export function setScheduleApi(data: {
   doctorId: string

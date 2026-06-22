@@ -36,4 +36,10 @@ public class DoctorController extends BaseController {
     public Result<DoctorVO> detail(@RequestParam String doctorId) {
         return success(doctorService.getDetail(doctorId));
     }
+
+    @Operation(summary = "当前登录医生信息")
+    @GetMapping("/me")
+    public Result<DoctorVO> me() {
+        return success(doctorService.getCurrentDoctor());
+    }
 }

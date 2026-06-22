@@ -23,4 +23,7 @@ public interface PatientService {
 
     /** 校验身份证号是否已存在 */
     boolean checkIdCard(String idCard);
+
+    /** 根据 userId 查找患者 */
+    PatientInfoVO findByUserId(String userId);
 }

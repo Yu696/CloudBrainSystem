@@ -30,12 +30,22 @@ export function updateMedicalRecordApi(data: { recordId: string; [key: string]: 
 
 /** 完成病历 */
 export function completeMedicalRecordApi(recordId: string) {
-  return request.put<string>('/medical-record/complete', { recordId })
+  return request.put<string>('/medical-record/complete', null, { params: { recordId } })
 }
 
 /** 开具处方 */
-export function createPrescriptionApi(data: { recordId: string; items: { drugId: string; dosage: string; frequency: string; days: number }[] }) {
+export function createPrescriptionApi(data: { recordId: string; status?: number; items: { drugId: string; dosage: string; frequency: string; days: number }[] }) {
   return request.post<{ prescriptionId: string }>('/prescription/create', data)
+}
+
+/** 更新处方 */
+export function updatePrescriptionApi(prescriptionId: string, data: { status?: number; items: { drugId: string; dosage: string; frequency: string; days: number }[] }) {
+  return request.put<{ prescriptionId: string }>('/prescription/update', data, { params: { prescriptionId } })
+}
+
+/** 删除处方 */
+export function deletePrescriptionApi(prescriptionId: string) {
+  return request.delete<string>('/prescription/delete', { params: { prescriptionId } })
 }
 
 /** 处方列表 */
@@ -49,8 +59,18 @@ export function getPrescriptionDetailApi(prescriptionId: string) {
 }
 
 /** 开检查单 */
-export function createExaminationOrderApi(data: { recordId: string; examName: string; category: string }) {
+export function createExaminationOrderApi(data: { recordId: string; examName: string; examCategory: number; examPurpose?: string; amount?: number }) {
   return request.post<{ orderId: string }>('/examination/create', data)
+}
+
+/** 更新检查单 */
+export function updateExaminationOrderApi(orderId: string, data: { examName: string; examCategory: number; examPurpose?: string; amount?: number }) {
+  return request.put<{ orderId: string }>('/examination/update', data, { params: { orderId } })
+}
+
+/** 删除检查单 */
+export function deleteExaminationOrderApi(orderId: string) {
+  return request.delete<string>('/examination/delete', { params: { orderId } })
 }
 
 /** 检查单列表 */
