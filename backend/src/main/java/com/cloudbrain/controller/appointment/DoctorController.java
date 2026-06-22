@@ -2,7 +2,7 @@ package com.cloudbrain.controller.appointment;
 
 import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
-import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.dto.response.DoctorVO;
 import com.cloudbrain.service.appointment.DoctorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +24,7 @@ public class DoctorController extends BaseController {
 
     @Operation(summary = "医生列表")
     @GetMapping("/list")
-    public Result<List<Doctor>> list(@RequestParam(required = false) String departmentId) {
+    public Result<List<DoctorVO>> list(@RequestParam(required = false) String departmentId) {
         if (departmentId != null && !departmentId.isEmpty()) {
             return success(doctorService.listByDepartment(departmentId));
         }
@@ -33,7 +33,13 @@ public class DoctorController extends BaseController {
 
     @Operation(summary = "医生详情")
     @GetMapping("/detail")
-    public Result<Doctor> detail(@RequestParam String doctorId) {
+    public Result<DoctorVO> detail(@RequestParam String doctorId) {
         return success(doctorService.getDetail(doctorId));
+    }
+
+    @Operation(summary = "当前登录医生信息")
+    @GetMapping("/me")
+    public Result<DoctorVO> me() {
+        return success(doctorService.getCurrentDoctor());
     }
 }

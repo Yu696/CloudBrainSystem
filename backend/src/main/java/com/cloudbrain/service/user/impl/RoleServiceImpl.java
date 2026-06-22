@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.PermissionUpdateRequest;
 import com.cloudbrain.dto.request.RoleAssignRequest;
+import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.Permission;
 import com.cloudbrain.entity.Role;
 import com.cloudbrain.entity.RolePermission;
 import com.cloudbrain.entity.User;
 import com.cloudbrain.entity.UserRole;
+import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.PermissionMapper;
 import com.cloudbrain.mapper.RoleMapper;
 import com.cloudbrain.mapper.RolePermissionMapper;
@@ -29,6 +31,7 @@ public class RoleServiceImpl implements RoleService {
 
     private final UserMapper userMapper;
     private final RoleMapper roleMapper;
+    private final DoctorMapper doctorMapper;
     private final PermissionMapper permissionMapper;
     private final UserRoleMapper userRoleMapper;
     private final RolePermissionMapper rolePermissionMapper;
@@ -84,6 +87,21 @@ public class RoleServiceImpl implements RoleService {
         // 同步更新 userType
         user.setUserType(mapRoleToUserType(role));
         userMapper.updateById(user);
+
+        // 分配医生角色时同步更新科室和职位
+        if ("doctor".equals(role.getRoleCode())) {
+            Doctor doctor = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getUserId, request.getUserId()));
+            if (doctor != null) {
+                if (request.getDepartmentId() != null) {
+                    doctor.setDepartmentId(request.getDepartmentId());
+                }
+                if (request.getTitle() != null) {
+                    doctor.setTitle(request.getTitle());
+                }
+                doctorMapper.updateById(doctor);
+            }
+        }
     }
 
     /** 根据角色编码映射 userType：admin=1, doctor=0, patient=2 */
@@ -136,6 +154,14 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     public void updatePermission(PermissionUpdateRequest request) {
         checkAdmin();
+
+        // 超级管理员权限不可修改
+        Role role = roleMapper.selectOne(new LambdaQueryWrapper<Role>()
+                .eq(Role::getRoleId, request.getRoleId()));
+        if (role != null && "admin".equals(role.getRoleCode())) {
+            throw new BusinessException("超级管理员权限不可修改");
+        }
+
         rolePermissionMapper.delete(
                 new LambdaQueryWrapper<RolePermission>()
                         .eq(RolePermission::getRoleId, request.getRoleId()));

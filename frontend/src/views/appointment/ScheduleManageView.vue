@@ -27,7 +27,7 @@
                   <el-option
                     v-for="doc in filteredDoctors"
                     :key="doc.doctorId"
-                    :label="(doc.title || '医师') + ' - ' + doc.doctorId"
+                    :label="(doc.title ? doc.title + ' - ' + doc.realName : (doc.realName || '医师'))"
                     :value="doc.doctorId"
                   />
                 </el-select>
@@ -68,10 +68,11 @@
                 />
               </el-form-item>
               <el-form-item label="时段长度">
-                <el-input-number v-model="form.slotDuration" :min="15" :max="120" :step="15" /> 分钟
+                <el-input-number v-model="form.slotDuration" :min="15" :max="1440" :step="15" /> 分钟
               </el-form-item>
               <el-form-item label="最大人数">
-                <el-input-number v-model="form.maxPatients" :min="1" :max="100" /> 人
+                <el-input-number :model-value="maxPatients" disabled :min="1" :max="999" /> 人
+                <span class="calc-hint">= {{ totalMinutes }}分钟 ÷ {{ form.slotDuration }}分钟/时段</span>
               </el-form-item>
               <el-form-item label="备注">
                 <el-input v-model="form.remark" placeholder="备注信息（选填）" maxlength="200" />
@@ -147,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Edit, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -163,6 +164,7 @@ interface Doctor {
   doctorId: string
   userId: string
   departmentId: string
+  realName: string
   title: string
 }
 
@@ -196,6 +198,30 @@ const form = reactive({
   maxPatients: 20,
   remark: ''
 })
+
+// 总分钟数（结束时间 - 开始时间）
+const totalMinutes = computed(() => {
+  if (!form.startTime || !form.endTime) return 0
+  const [sh, sm] = form.startTime.split(':').map(Number)
+  const [eh, em] = form.endTime.split(':').map(Number)
+  return Math.max(0, (eh * 60 + em) - (sh * 60 + sm))
+})
+
+// 最大人数 = 总分钟 ÷ 时段长度（只读展示）
+const maxPatients = computed(() => {
+  if (!totalMinutes.value || !form.slotDuration) return 0
+  return Math.floor(totalMinutes.value / form.slotDuration)
+})
+
+// startTime/endTime 变化时，slotDuration 默认设为总时长
+watch(
+  [() => form.startTime, () => form.endTime],
+  () => {
+    if (totalMinutes.value > 0) {
+      form.slotDuration = totalMinutes.value
+    }
+  }
+)
 
 const rules: FormRules = {
   departmentId: [{ required: true, message: '请选择科室', trigger: 'change' }],
@@ -320,5 +346,11 @@ async function handleQuery() {
   display: flex;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.calc-hint {
+  font-size: var(--cb-font-xs);
+  color: var(--cb-text-placeholder);
+  margin-left: 8px;
 }
 </style>

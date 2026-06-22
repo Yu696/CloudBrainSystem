@@ -29,56 +29,138 @@
           <template #title>个人信息</template>
         </el-menu-item>
 
-        <!-- 患者档案 -->
-        <el-sub-menu index="patient">
-          <template #title>
-            <el-icon><UserFilled /></el-icon>
-            <span>患者档案</span>
-          </template>
-          <el-menu-item index="/patient/list">
-            <el-icon><List /></el-icon>
-            <template #title>患者列表</template>
-          </el-menu-item>
-          <el-menu-item index="/patient/create">
-            <el-icon><Plus /></el-icon>
-            <template #title>新建档案</template>
-          </el-menu-item>
-        </el-sub-menu>
+        <!-- ===== 管理员菜单 ===== -->
+        <template v-if="userStore.isAdmin">
+          <el-sub-menu index="patient">
+            <template #title>
+              <el-icon><UserFilled /></el-icon>
+              <span>患者档案</span>
+            </template>
+            <el-menu-item index="/patient/list">
+              <el-icon><List /></el-icon>
+              <template #title>患者列表</template>
+            </el-menu-item>
+            <el-menu-item index="/patient/create">
+              <el-icon><Plus /></el-icon>
+              <template #title>新建档案</template>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <!-- 预约挂号 -->
-        <el-sub-menu index="appointment">
-          <template #title>
-            <el-icon><Calendar /></el-icon>
-            <span>预约挂号</span>
-          </template>
-          <el-menu-item index="/appointment/dept">
-            <el-icon><HomeFilled /></el-icon>
-            <template #title>科室选择</template>
-          </el-menu-item>
-          <el-menu-item index="/appointment/records">
-            <el-icon><List /></el-icon>
-            <template #title>挂号记录</template>
-          </el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="appointment">
+            <template #title>
+              <el-icon><Calendar /></el-icon>
+              <span>预约管理</span>
+            </template>
+            <el-menu-item index="/appointment/dept">
+              <el-icon><HomeFilled /></el-icon>
+              <template #title>科室选择</template>
+            </el-menu-item>
+            <el-menu-item index="/appointment/records">
+              <el-icon><List /></el-icon>
+              <template #title>挂号记录</template>
+            </el-menu-item>
+          </el-sub-menu>
 
-        <el-sub-menu v-if="userStore.isAdmin" index="admin">
-          <template #title>
-            <el-icon><Setting /></el-icon>
-            <span>系统管理</span>
-          </template>
-          <el-menu-item index="/admin/role">
-            <el-icon><UserFilled /></el-icon>
-            <template #title>角色管理</template>
-          </el-menu-item>
-          <el-menu-item index="/admin/permission">
-            <el-icon><Key /></el-icon>
-            <template #title>权限管理</template>
-          </el-menu-item>
-          <el-menu-item index="/admin/schedule">
-            <el-icon><Calendar /></el-icon>
-            <template #title>排班管理</template>
-          </el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="doctor-sub">
+            <template #title>
+              <el-icon><FirstAidKit /></el-icon>
+              <span>诊疗中心</span>
+            </template>
+            <el-menu-item index="/doctor/waiting">
+              <el-icon><List /></el-icon>
+              <template #title>待诊列表</template>
+            </el-menu-item>
+            <el-menu-item index="/doctor/history">
+              <el-icon><Clock /></el-icon>
+              <template #title>已诊列表</template>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="admin">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span>系统管理</span>
+            </template>
+            <el-menu-item index="/admin/users">
+              <el-icon><UserFilled /></el-icon>
+              <template #title>用户管理</template>
+            </el-menu-item>
+            <el-menu-item index="/admin/role">
+              <el-icon><User /></el-icon>
+              <template #title>角色管理</template>
+            </el-menu-item>
+            <el-menu-item index="/admin/permission">
+              <el-icon><Key /></el-icon>
+              <template #title>权限管理</template>
+            </el-menu-item>
+            <el-menu-item index="/admin/schedule">
+              <el-icon><Calendar /></el-icon>
+              <template #title>排班管理</template>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
+
+        <!-- ===== 医生菜单 ===== -->
+        <template v-if="userStore.isDoctor">
+          <el-sub-menu index="patient">
+            <template #title>
+              <el-icon><UserFilled /></el-icon>
+              <span>患者档案</span>
+            </template>
+            <el-menu-item index="/patient/list">
+              <el-icon><List /></el-icon>
+              <template #title>患者列表</template>
+            </el-menu-item>
+            <el-menu-item index="/patient/create">
+              <el-icon><Plus /></el-icon>
+              <template #title>新建档案</template>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="doctor-sub">
+            <template #title>
+              <el-icon><FirstAidKit /></el-icon>
+              <span>诊疗中心</span>
+            </template>
+            <el-menu-item index="/doctor/waiting">
+              <el-icon><List /></el-icon>
+              <template #title>待诊列表</template>
+            </el-menu-item>
+            <el-menu-item index="/doctor/history">
+              <el-icon><Clock /></el-icon>
+              <template #title>已诊列表</template>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
+
+        <!-- ===== 患者菜单 ===== -->
+        <template v-if="userStore.isPatient">
+          <el-sub-menu index="appointment">
+            <template #title>
+              <el-icon><Calendar /></el-icon>
+              <span>预约挂号</span>
+            </template>
+            <el-menu-item index="/appointment/dept">
+              <el-icon><HomeFilled /></el-icon>
+              <template #title>科室选择</template>
+            </el-menu-item>
+            <el-menu-item index="/appointment/records">
+              <el-icon><List /></el-icon>
+              <template #title>挂号记录</template>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="medical-sub">
+            <template #title>
+              <el-icon><FirstAidKit /></el-icon>
+              <span>我的诊疗</span>
+            </template>
+            <el-menu-item index="/patient/records">
+              <el-icon><Document /></el-icon>
+              <template #title>我的病历</template>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
       </el-menu>
     </el-aside>
 
@@ -135,7 +217,7 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Odometer, User, Setting, UserFilled, Key,
   Fold, Expand, ArrowDown, SwitchButton,
-  Calendar, HomeFilled, List
+  Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'
