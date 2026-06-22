@@ -33,6 +33,11 @@ export function completeMedicalRecordApi(recordId: string) {
   return request.put<string>('/medical-record/complete', null, { params: { recordId } })
 }
 
+/** 删除病历 */
+export function deleteMedicalRecordApi(recordId: string) {
+  return request.delete<string>('/medical-record/delete', { params: { recordId } })
+}
+
 /** 开具处方 */
 export function createPrescriptionApi(data: { recordId: string; status?: number; items: { drugId: string; dosage: string; frequency: string; days: number }[] }) {
   return request.post<{ prescriptionId: string }>('/prescription/create', data)

@@ -5,16 +5,21 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.AppointmentBookRequest;
 import com.cloudbrain.dto.request.AppointmentCancelRequest;
+import com.cloudbrain.dto.response.AppointmentVO;
 import com.cloudbrain.entity.Appointment;
+import com.cloudbrain.entity.Department;
 import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.Patient;
 import com.cloudbrain.entity.Schedule;
 import com.cloudbrain.entity.TimeSlot;
+import com.cloudbrain.entity.User;
 import com.cloudbrain.mapper.AppointmentMapper;
+import com.cloudbrain.mapper.DepartmentMapper;
 import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.mapper.ScheduleMapper;
 import com.cloudbrain.mapper.TimeSlotMapper;
+import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.service.appointment.AppointmentService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +40,8 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private final DoctorMapper doctorMapper;
     private final ScheduleMapper scheduleMapper;
     private final PatientMapper patientMapper;
+    private final DepartmentMapper departmentMapper;
+    private final UserMapper userMapper;
 
     @Override
     @Transactional
@@ -198,6 +206,85 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         return this.list(new LambdaQueryWrapper<Appointment>()
                 .eq(Appointment::getDoctorId, doctorId)
                 .orderByDesc(Appointment::getCreateTime));
+    }
+
+    @Override
+    public List<AppointmentVO> listAll(String patientId, String doctorId, String date, Integer status) {
+        LambdaQueryWrapper<Appointment> wrapper = new LambdaQueryWrapper<Appointment>();
+        if (patientId != null && !patientId.isEmpty()) {
+            wrapper.eq(Appointment::getPatientId, patientId);
+        }
+        if (doctorId != null && !doctorId.isEmpty()) {
+            wrapper.eq(Appointment::getDoctorId, doctorId);
+        }
+        if (date != null && !date.isEmpty()) {
+            wrapper.eq(Appointment::getAppointmentDate, LocalDate.parse(date));
+        }
+        if (status != null) {
+            wrapper.eq(Appointment::getStatus, status);
+        }
+        List<Appointment> list = this.list(wrapper.orderByDesc(Appointment::getCreateTime));
+        return list.stream().map(this::toVO).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void delete(String appointmentId) {
+        Appointment appointment = this.getOne(new LambdaQueryWrapper<Appointment>()
+                .eq(Appointment::getAppointmentId, appointmentId));
+        if (appointment == null) {
+            throw new BusinessException("预约不存在");
+        }
+        this.removeById(appointment.getId());
+    }
+
+    private AppointmentVO toVO(Appointment a) {
+        String patientName = null;
+        String doctorName = null;
+        String departmentName = null;
+
+        if (a.getPatientId() != null) {
+            Patient p = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, a.getPatientId()));
+            if (p != null) patientName = p.getName();
+        }
+        if (a.getDoctorId() != null) {
+            Doctor d = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, a.getDoctorId()));
+            if (d != null && d.getUserId() != null) {
+                User u = userMapper.selectOne(
+                        new LambdaQueryWrapper<User>().eq(User::getUserId, d.getUserId()));
+                if (u != null) doctorName = u.getRealName();
+            }
+        }
+        if (a.getDepartmentId() != null) {
+            Department dept = departmentMapper.selectOne(
+                    new LambdaQueryWrapper<Department>().eq(Department::getDepartmentId, a.getDepartmentId()));
+            if (dept != null) departmentName = dept.getName();
+        }
+
+        return AppointmentVO.builder()
+                .appointmentId(a.getAppointmentId())
+                .patientId(a.getPatientId())
+                .patientName(patientName)
+                .doctorId(a.getDoctorId())
+                .doctorName(doctorName)
+                .departmentId(a.getDepartmentId())
+                .departmentName(departmentName)
+                .scheduleId(a.getScheduleId())
+                .timeSlotId(a.getTimeSlotId())
+                .appointmentDate(a.getAppointmentDate())
+                .timeSlotDesc(a.getTimeSlotDesc())
+                .appointmentType(a.getAppointmentType())
+                .symptoms(a.getSymptoms())
+                .source(a.getSource())
+                .status(a.getStatus())
+                .paymentStatus(a.getPaymentStatus())
+                .totalFee(a.getTotalFee())
+                .cancelReason(a.getCancelReason())
+                .createTime(a.getCreateTime())
+                .updateTime(a.getUpdateTime())
+                .build();
     }
 
     private String formatTimeSlot(TimeSlot slot) {

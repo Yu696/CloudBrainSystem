@@ -62,6 +62,31 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/UserAddView.vue'),
         meta: { title: '新增用户', admin: true }
       },
+      // 管理员 - 科室/医生/预约/病历管理
+      {
+        path: 'admin/departments',
+        name: 'DepartmentManage',
+        component: () => import('@/views/admin/DepartmentManageView.vue'),
+        meta: { title: '科室管理', admin: true }
+      },
+      {
+        path: 'admin/doctors',
+        name: 'DoctorManage',
+        component: () => import('@/views/admin/DoctorManageView.vue'),
+        meta: { title: '医生管理', admin: true }
+      },
+      {
+        path: 'admin/appointments',
+        name: 'AdminAppointments',
+        component: () => import('@/views/admin/AdminAppointmentView.vue'),
+        meta: { title: '预约管理', admin: true }
+      },
+      {
+        path: 'admin/medical-records',
+        name: 'AdminMedicalRecords',
+        component: () => import('@/views/admin/AdminMedicalRecordView.vue'),
+        meta: { title: '病历管理', admin: true }
+      },
       // M02 患者档案
       {
         path: 'patient/create',

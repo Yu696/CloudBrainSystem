@@ -31,6 +31,23 @@
 
         <!-- ===== 管理员菜单 ===== -->
         <template v-if="userStore.isAdmin">
+          <el-menu-item index="/admin/departments">
+            <el-icon><HomeFilled /></el-icon>
+            <template #title>科室管理</template>
+          </el-menu-item>
+          <el-menu-item index="/admin/doctors">
+            <el-icon><FirstAidKit /></el-icon>
+            <template #title>医生管理</template>
+          </el-menu-item>
+          <el-menu-item index="/admin/appointments">
+            <el-icon><Calendar /></el-icon>
+            <template #title>预约管理</template>
+          </el-menu-item>
+          <el-menu-item index="/admin/medical-records">
+            <el-icon><Document /></el-icon>
+            <template #title>病历管理</template>
+          </el-menu-item>
+
           <el-sub-menu index="patient">
             <template #title>
               <el-icon><UserFilled /></el-icon>
@@ -46,41 +63,15 @@
             </el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="appointment">
-            <template #title>
-              <el-icon><Calendar /></el-icon>
-              <span>预约管理</span>
-            </template>
-            <el-menu-item index="/appointment/dept">
-              <el-icon><HomeFilled /></el-icon>
-              <template #title>科室选择</template>
-            </el-menu-item>
-            <el-menu-item index="/appointment/records">
-              <el-icon><List /></el-icon>
-              <template #title>挂号记录</template>
-            </el-menu-item>
-          </el-sub-menu>
-
-          <el-sub-menu index="doctor-sub">
-            <template #title>
-              <el-icon><FirstAidKit /></el-icon>
-              <span>诊疗中心</span>
-            </template>
-            <el-menu-item index="/doctor/waiting">
-              <el-icon><List /></el-icon>
-              <template #title>待诊列表</template>
-            </el-menu-item>
-            <el-menu-item index="/doctor/history">
-              <el-icon><Clock /></el-icon>
-              <template #title>已诊列表</template>
-            </el-menu-item>
-          </el-sub-menu>
-
           <el-sub-menu index="admin">
             <template #title>
               <el-icon><Setting /></el-icon>
               <span>系统管理</span>
             </template>
+            <el-menu-item index="/admin/schedule">
+              <el-icon><Calendar /></el-icon>
+              <template #title>排班管理</template>
+            </el-menu-item>
             <el-menu-item index="/admin/users">
               <el-icon><UserFilled /></el-icon>
               <template #title>用户管理</template>
@@ -92,10 +83,6 @@
             <el-menu-item index="/admin/permission">
               <el-icon><Key /></el-icon>
               <template #title>权限管理</template>
-            </el-menu-item>
-            <el-menu-item index="/admin/schedule">
-              <el-icon><Calendar /></el-icon>
-              <template #title>排班管理</template>
             </el-menu-item>
           </el-sub-menu>
         </template>

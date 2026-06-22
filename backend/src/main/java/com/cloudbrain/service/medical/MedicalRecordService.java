@@ -22,4 +22,7 @@ public interface MedicalRecordService {
 
     /** 完成病历 */
     void completeRecord(String recordId);
+
+    /** 删除病历 */
+    void deleteRecord(String recordId);
 }

@@ -4,6 +4,7 @@ import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.dto.request.AppointmentBookRequest;
 import com.cloudbrain.dto.request.AppointmentCancelRequest;
+import com.cloudbrain.dto.response.AppointmentVO;
 import com.cloudbrain.entity.Appointment;
 import com.cloudbrain.service.appointment.AppointmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,5 +53,21 @@ public class AppointmentController extends BaseController {
             return success(appointmentService.listByDoctor(doctorId));
         }
         return fail("请提供 patientId 或 doctorId");
+    }
+
+    @Operation(summary = "管理员预约列表（支持多条件筛选）")
+    @GetMapping("/admin/list")
+    public Result<List<AppointmentVO>> adminList(@RequestParam(required = false) String patientId,
+                                                  @RequestParam(required = false) String doctorId,
+                                                  @RequestParam(required = false) String date,
+                                                  @RequestParam(required = false) Integer status) {
+        return success(appointmentService.listAll(patientId, doctorId, date, status));
+    }
+
+    @Operation(summary = "删除预约")
+    @DeleteMapping("/delete")
+    public Result<String> delete(@RequestParam String appointmentId) {
+        appointmentService.delete(appointmentId);
+        return success("删除成功");
     }
 }

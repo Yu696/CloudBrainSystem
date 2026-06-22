@@ -54,4 +54,11 @@ public class MedicalRecordController extends BaseController {
         medicalRecordService.completeRecord(recordId);
         return success("病历已完成");
     }
+
+    @Operation(summary = "删除病历")
+    @DeleteMapping("/delete")
+    public Result<String> delete(@RequestParam String recordId) {
+        medicalRecordService.deleteRecord(recordId);
+        return success("删除成功");
+    }
 }
