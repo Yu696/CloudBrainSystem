@@ -30,6 +30,7 @@ request.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('userInfo')
+      localStorage.removeItem('patientId')
       router.push('/login')
       ElMessage.error('登录已过期，请重新登录')
     } else {

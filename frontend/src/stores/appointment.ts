@@ -1,11 +1,22 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useUserStore } from './user'
 
 export const useAppointmentStore = defineStore('appointment', () => {
-  const patientId = ref(localStorage.getItem('patientId') || '')
+  const userStore = useUserStore()
+
+  const manualPatientId = ref(localStorage.getItem('patientId') || '')
+
+  /** 患者本人登录时用 userInfo.patientId，否则用手动设置的 */
+  const patientId = computed(() => {
+    if (userStore.isPatient && userStore.userInfo?.patientId) {
+      return userStore.userInfo.patientId
+    }
+    return manualPatientId.value
+  })
 
   function setPatientId(id: string) {
-    patientId.value = id
+    manualPatientId.value = id
     localStorage.setItem('patientId', id)
   }
 

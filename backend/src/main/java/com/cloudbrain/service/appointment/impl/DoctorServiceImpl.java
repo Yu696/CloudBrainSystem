@@ -8,7 +8,6 @@ import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.User;
 import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.UserMapper;
-import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.service.appointment.DoctorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -27,7 +26,9 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
 
     @Override
     public List<DoctorVO> listByDepartment(String departmentId) {
-        List<Doctor> doctors = this.list(new LambdaQueryWrapper<Doctor>().eq(Doctor::getDepartmentId, departmentId));
+        List<Doctor> doctors = this.list(new LambdaQueryWrapper<Doctor>()
+                .eq(Doctor::getDepartmentId, departmentId)
+                .eq(Doctor::getAvailable, 1));
         return doctors.stream().map(this::toVO).collect(Collectors.toList());
     }
 
