@@ -11,6 +11,8 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value)
   const role = computed(() => userInfo.value?.role || '')
   const isAdmin = computed(() => userInfo.value?.userType === 1)
+  const isDoctor = computed(() => userInfo.value?.userType === 0)
+  const isPatient = computed(() => userInfo.value?.userType === 2)
 
   /** 登录，保存 token 和用户信息 */
   async function login(userName: string, password: string) {
@@ -38,5 +40,5 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
   }
 
-  return { token, userInfo, isLoggedIn, role, isAdmin, login, logout, fetchUserInfo }
+  return { token, userInfo, isLoggedIn, role, isAdmin, isDoctor, isPatient, login, logout, fetchUserInfo }
 })

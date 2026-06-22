@@ -103,4 +103,14 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> impl
         Long count = lambdaQuery().eq(Patient::getIdCard, idCard).count();
         return count > 0;
     }
+
+    @Override
+    public PatientInfoVO findByUserId(String userId) {
+        Patient patient = this.getOne(new LambdaQueryWrapper<Patient>()
+                .eq(Patient::getUserId, userId));
+        if (patient == null) {
+            throw new BusinessException("未找到关联的患者档案");
+        }
+        return PatientInfoVO.from(patient);
+    }
 }

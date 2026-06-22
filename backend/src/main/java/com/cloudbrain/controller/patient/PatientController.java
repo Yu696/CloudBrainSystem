@@ -62,4 +62,11 @@ public class PatientController extends BaseController {
         boolean exists = patientService.checkIdCard(idCard);
         return success(Map.of("exists", exists));
     }
+
+    /** 根据当前登录用户的 userId 查找患者档案 */
+    @Operation(summary = "根据用户ID查找患者")
+    @GetMapping("/find-by-user")
+    public Result<PatientInfoVO> findByUser(@RequestParam String userId) {
+        return success(patientService.findByUserId(userId));
+    }
 }

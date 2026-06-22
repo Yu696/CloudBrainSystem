@@ -1,0 +1,155 @@
+package com.cloudbrain.service.medical.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.cloudbrain.common.exception.BusinessException;
+import com.cloudbrain.dto.request.ExaminationOrderCreateRequest;
+import com.cloudbrain.dto.response.ExaminationOrderVO;
+import com.cloudbrain.dto.response.ExaminationResultVO;
+import com.cloudbrain.entity.ExaminationOrder;
+import com.cloudbrain.entity.ExaminationResult;
+import com.cloudbrain.entity.MedicalRecord;
+import com.cloudbrain.mapper.ExaminationOrderMapper;
+import com.cloudbrain.mapper.ExaminationResultMapper;
+import com.cloudbrain.mapper.MedicalRecordMapper;
+import com.cloudbrain.service.medical.ExaminationService;
+import com.cloudbrain.util.UUIDUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, ExaminationOrder> implements ExaminationService {
+
+    private final MedicalRecordMapper medicalRecordMapper;
+    private final ExaminationResultMapper examinationResultMapper;
+
+    /** 检查项目价格表 */
+    private static final Map<String, BigDecimal> EXAM_PRICE_MAP = Map.<String, BigDecimal>ofEntries(
+        // 实验室检查
+        Map.entry("血常规", new BigDecimal("35.00")),
+        Map.entry("尿常规", new BigDecimal("20.00")),
+        Map.entry("肝功能全套", new BigDecimal("120.00")),
+        Map.entry("肾功能全套", new BigDecimal("110.00")),
+        Map.entry("血糖", new BigDecimal("25.00")),
+        Map.entry("血脂全套", new BigDecimal("130.00")),
+        Map.entry("电解质", new BigDecimal("45.00")),
+        Map.entry("凝血功能", new BigDecimal("80.00")),
+        Map.entry("心肌酶谱", new BigDecimal("90.00")),
+        Map.entry("甲状腺功能", new BigDecimal("150.00")),
+        Map.entry("肿瘤标志物", new BigDecimal("280.00")),
+        // 影像学检查
+        Map.entry("X光胸片", new BigDecimal("150.00")),
+        Map.entry("CT平扫", new BigDecimal("450.00")),
+        Map.entry("CT增强", new BigDecimal("800.00")),
+        Map.entry("MRI平扫", new BigDecimal("900.00")),
+        Map.entry("MRI增强", new BigDecimal("1500.00")),
+        Map.entry("B超腹部", new BigDecimal("180.00")),
+        Map.entry("B超心脏", new BigDecimal("220.00")),
+        Map.entry("B超甲状腺", new BigDecimal("150.00")),
+        Map.entry("B超妇科", new BigDecimal("180.00")),
+        Map.entry("PET-CT", new BigDecimal("7000.00")),
+        // 功能检查
+        Map.entry("心电图", new BigDecimal("50.00")),
+        Map.entry("动态心电图", new BigDecimal("280.00")),
+        Map.entry("肺功能检测", new BigDecimal("160.00")),
+        Map.entry("脑电图", new BigDecimal("200.00")),
+        Map.entry("肌电图", new BigDecimal("250.00")),
+        Map.entry("胃镜", new BigDecimal("350.00")),
+        Map.entry("肠镜", new BigDecimal("400.00")),
+        Map.entry("支气管镜", new BigDecimal("500.00")),
+        Map.entry("骨密度检测", new BigDecimal("180.00")),
+        Map.entry("视力检查", new BigDecimal("30.00"))
+    );
+
+    @Override
+    @Transactional
+    public ExaminationOrderVO createOrder(ExaminationOrderCreateRequest request) {
+        MedicalRecord record = medicalRecordMapper.selectOne(new LambdaQueryWrapper<MedicalRecord>()
+                .eq(MedicalRecord::getRecordId, request.getRecordId()));
+        if (record == null) {
+            throw new BusinessException("病历不存在");
+        }
+
+        ExaminationOrder order = new ExaminationOrder();
+        order.setOrderId(UUIDUtil.generateExaminationOrderId());
+        order.setRecordId(request.getRecordId());
+        order.setPatientId(record.getPatientId());
+        order.setDoctorId(record.getDoctorId());
+        order.setExamName(request.getExamName());
+        order.setExamCategory(request.getExamCategory());
+        order.setExamPurpose(request.getExamPurpose());
+        order.setStatus(0);
+        order.setIsAiRecommended(0);
+        // 费用：传了用传入值，否则按价目表，默认0
+        BigDecimal amount = request.getAmount();
+        if (amount == null) {
+            amount = EXAM_PRICE_MAP.getOrDefault(request.getExamName(), BigDecimal.ZERO);
+        }
+        order.setAmount(amount);
+        save(order);
+
+        return ExaminationOrderVO.from(order);
+    }
+
+    @Override
+    @Transactional
+    public ExaminationOrderVO updateOrder(String orderId, ExaminationOrderCreateRequest request) {
+        ExaminationOrder order = this.getOne(new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getOrderId, orderId));
+        if (order == null) {
+            throw new BusinessException("检查单不存在");
+        }
+        order.setExamName(request.getExamName());
+        order.setExamCategory(request.getExamCategory());
+        order.setExamPurpose(request.getExamPurpose());
+        BigDecimal amount = request.getAmount();
+        if (amount == null) {
+            amount = EXAM_PRICE_MAP.getOrDefault(request.getExamName(), BigDecimal.ZERO);
+        }
+        order.setAmount(amount);
+        updateById(order);
+        return ExaminationOrderVO.from(order);
+    }
+
+    @Override
+    @Transactional
+    public void deleteOrder(String orderId) {
+        ExaminationOrder order = this.getOne(new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getOrderId, orderId));
+        if (order == null) {
+            throw new BusinessException("检查单不存在");
+        }
+        // 删除关联的检查结果
+        examinationResultMapper.delete(new LambdaQueryWrapper<ExaminationResult>()
+                .eq(ExaminationResult::getOrderId, orderId));
+        removeById(order.getId());
+    }
+
+    @Override
+    public List<ExaminationOrderVO> listOrders(String recordId) {
+        LambdaQueryWrapper<ExaminationOrder> wrapper = new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getRecordId, recordId)
+                .orderByDesc(ExaminationOrder::getCreateTime);
+
+        return this.list(wrapper).stream()
+                .map(ExaminationOrderVO::from)
+                .toList();
+    }
+
+    @Override
+    public ExaminationResultVO getResult(String orderId) {
+        ExaminationResult result = examinationResultMapper.selectOne(
+                new LambdaQueryWrapper<ExaminationResult>()
+                        .eq(ExaminationResult::getOrderId, orderId));
+        if (result == null) {
+            throw new BusinessException("检查结果不存在");
+        }
+        return ExaminationResultVO.from(result);
+    }
+}
