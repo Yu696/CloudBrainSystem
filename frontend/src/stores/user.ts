@@ -14,7 +14,7 @@ export const useUserStore = defineStore('user', () => {
   const isDoctor = computed(() => userInfo.value?.userType === 0)
   const isPatient = computed(() => userInfo.value?.userType === 2)
 
-  /** 登录，保存 token 和用户信息 */
+  /** 登录，保存 token 和用户信息，患者同步 patientId */
   async function login(userName: string, password: string) {
     const res = await loginApi({ userName, password })
     const data = res.data as LoginResponse
@@ -22,6 +22,9 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = data.userInfo
     localStorage.setItem('token', data.token)
     localStorage.setItem('userInfo', JSON.stringify(data.userInfo))
+    if (data.userInfo.userType === 2 && data.userInfo.patientId) {
+      localStorage.setItem('patientId', data.userInfo.patientId)
+    }
     return data
   }
 
@@ -31,13 +34,17 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('userInfo')
+    localStorage.removeItem('patientId')
   }
 
-  /** 获取最新用户信息 */
+  /** 获取最新用户信息，患者同步 patientId */
   async function fetchUserInfo() {
     const res = await getUserInfoApi()
     userInfo.value = res.data as UserInfoVO
     localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+    if (userInfo.value.userType === 2 && userInfo.value.patientId) {
+      localStorage.setItem('patientId', userInfo.value.patientId)
+    }
   }
 
   return { token, userInfo, isLoggedIn, role, isAdmin, isDoctor, isPatient, login, logout, fetchUserInfo }

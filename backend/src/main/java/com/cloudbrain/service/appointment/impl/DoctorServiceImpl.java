@@ -25,7 +25,9 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
 
     @Override
     public List<DoctorVO> listByDepartment(String departmentId) {
-        List<Doctor> doctors = this.list(new LambdaQueryWrapper<Doctor>().eq(Doctor::getDepartmentId, departmentId));
+        List<Doctor> doctors = this.list(new LambdaQueryWrapper<Doctor>()
+                .eq(Doctor::getDepartmentId, departmentId)
+                .eq(Doctor::getAvailable, 1));
         return doctors.stream().map(this::toVO).collect(Collectors.toList());
     }
 

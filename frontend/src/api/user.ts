@@ -23,8 +23,22 @@ export function getUserInfoApi() {
   return request.get<UserInfoVO>('/user/info')
 }
 
-/** 更新个人信息 */
-export function updateUserApi(data: { realName?: string; phone?: string; email?: string }) {
+/** 更新个人信息（含患者档案字段） */
+export function updateUserApi(data: {
+  realName?: string
+  phone?: string
+  email?: string
+  name?: string
+  idCard?: string
+  gender?: number
+  birthDate?: string
+  emergencyPhone?: string
+  address?: string
+  bloodType?: string
+  allergyHistory?: string
+  geneticDiseases?: string
+  medicalHistory?: string
+}) {
   return request.put<string>('/user/update', data)
 }
 
