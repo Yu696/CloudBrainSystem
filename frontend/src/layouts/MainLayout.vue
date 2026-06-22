@@ -28,18 +28,59 @@
           <el-icon><User /></el-icon>
           <template #title>个人信息</template>
         </el-menu-item>
+
+        <!-- 患者档案 -->
+        <el-sub-menu index="patient">
+          <template #title>
+            <el-icon><UserFilled /></el-icon>
+            <span>患者档案</span>
+          </template>
+          <el-menu-item index="/patient/list">
+            <el-icon><List /></el-icon>
+            <template #title>患者列表</template>
+          </el-menu-item>
+          <el-menu-item index="/patient/create">
+            <el-icon><Plus /></el-icon>
+            <template #title>新建档案</template>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 预约挂号 -->
+        <el-sub-menu index="appointment">
+          <template #title>
+            <el-icon><Calendar /></el-icon>
+            <span>预约挂号</span>
+          </template>
+          <el-menu-item index="/appointment/dept">
+            <el-icon><HomeFilled /></el-icon>
+            <template #title>科室选择</template>
+          </el-menu-item>
+          <el-menu-item index="/appointment/records">
+            <el-icon><List /></el-icon>
+            <template #title>挂号记录</template>
+          </el-menu-item>
+        </el-sub-menu>
+
         <el-sub-menu v-if="userStore.isAdmin" index="admin">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系统管理</span>
           </template>
-          <el-menu-item index="/admin/role">
+          <el-menu-item index="/admin/users">
             <el-icon><UserFilled /></el-icon>
+            <template #title>用户管理</template>
+          </el-menu-item>
+          <el-menu-item index="/admin/role">
+            <el-icon><User /></el-icon>
             <template #title>角色管理</template>
           </el-menu-item>
           <el-menu-item index="/admin/permission">
             <el-icon><Key /></el-icon>
             <template #title>权限管理</template>
+          </el-menu-item>
+          <el-menu-item index="/admin/schedule">
+            <el-icon><Calendar /></el-icon>
+            <template #title>排班管理</template>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -97,7 +138,8 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   Odometer, User, Setting, UserFilled, Key,
-  Fold, Expand, ArrowDown, SwitchButton
+  Fold, Expand, ArrowDown, SwitchButton,
+  Calendar, HomeFilled, List
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'

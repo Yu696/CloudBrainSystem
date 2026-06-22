@@ -78,8 +78,20 @@
                 <el-icon><User /></el-icon>
                 <span>个人信息</span>
               </el-button>
-              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/role')">
+              <el-button text class="quick-link-item" @click="router.push('/appointment/dept')">
+                <el-icon><Calendar /></el-icon>
+                <span>预约挂号</span>
+              </el-button>
+              <el-button text class="quick-link-item" @click="router.push('/appointment/records')">
+                <el-icon><List /></el-icon>
+                <span>挂号记录</span>
+              </el-button>
+              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/users')">
                 <el-icon><UserFilled /></el-icon>
+                <span>用户管理</span>
+              </el-button>
+              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/role')">
+                <el-icon><User /></el-icon>
                 <span>角色管理</span>
               </el-button>
             </div>
@@ -93,7 +105,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, UserFilled, Document, TrendCharts } from '@element-plus/icons-vue'
+import { User, UserFilled, Document, TrendCharts, Calendar, List } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
