@@ -19,7 +19,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> implements PatientService {
+public class  PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> implements PatientService {
 
     @Override
     @Transactional

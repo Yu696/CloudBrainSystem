@@ -123,5 +123,5 @@ export function deleteAppointmentApi(appointmentId: string) {
 
 /** 仪表盘统计数据 */
 export function getDashboardStatsApi() {
-  return request.get<{ todayAppointments: number; waitingCount: number; monthNewPatients: number; pendingCount: number }>('/dashboard/stats')
+  return request.get<{ todayAppointments: number; waitingCount: number; monthNewPatients: number; todayCompleted: number }>('/dashboard/stats')
 }

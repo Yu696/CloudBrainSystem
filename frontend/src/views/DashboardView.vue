@@ -141,7 +141,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, UserFilled, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit } from '@element-plus/icons-vue'
+import { User, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit, CircleCheck, CreditCard } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStatsApi } from '@/api/appointment'
 
@@ -161,21 +161,39 @@ const roleText = computed(() => {
   return '患者'
 })
 
-const stats = ref([
-  { label: '今日挂号', value: 0, icon: Document },
-  { label: '待诊人数', value: 0, icon: User },
-  { label: '本月新患', value: 0, icon: TrendCharts },
-  { label: '待处理', value: 0, icon: UserFilled }
-])
+const statsData = ref<any>({})
+
+const stats = computed(() => {
+  const d = statsData.value
+  if (userStore.isAdmin) {
+    return [
+      { label: '今日挂号', value: d.todayAppointments ?? 0, icon: Document },
+      { label: '待诊人数', value: d.waitingCount ?? 0, icon: User },
+      { label: '本月新患', value: d.monthNewPatients ?? 0, icon: TrendCharts },
+      { label: '今日已诊', value: d.todayCompleted ?? 0, icon: CircleCheck }
+    ]
+  }
+  if (userStore.isDoctor) {
+    return [
+      { label: '今日待诊', value: d.doctorTodayWaiting ?? 0, icon: User },
+      { label: '今日已诊', value: d.doctorTodayCompleted ?? 0, icon: CircleCheck },
+      { label: '本月接诊', value: d.doctorMonthCompleted ?? 0, icon: TrendCharts },
+      { label: '累计患者', value: d.doctorTotalPatients ?? 0, icon: HomeFilled }
+    ]
+  }
+  // patient
+  return [
+    { label: '累计挂号', value: d.patientTotalAppointments ?? 0, icon: Document },
+    { label: '本月挂号', value: d.patientMonthAppointments ?? 0, icon: Calendar },
+    { label: '我的病历', value: d.patientTotalRecords ?? 0, icon: List },
+    { label: '待支付', value: d.patientUnpaidCount ?? 0, icon: CreditCard }
+  ]
+})
 
 onMounted(async () => {
   try {
     const res = await getDashboardStatsApi()
-    const data = res.data
-    stats.value[0].value = data.todayAppointments
-    stats.value[1].value = data.waitingCount
-    stats.value[2].value = data.monthNewPatients
-    stats.value[3].value = data.pendingCount
+    statsData.value = res.data
   } catch {
     // keep default zeros
   }
