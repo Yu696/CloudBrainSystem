@@ -88,7 +88,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import { UserFilled, Key } from '@element-plus/icons-vue'
-import { getPermissionsApi, updatePermissionApi, listAllRolesApi } from '@/api/user'
+import { getPermissionsApi, updatePermissionApi, listAllRolesApi, getPermissionTreeApi } from '@/api/user'
 import type { Permission } from '@/types/user'
 
 interface RoleItem {
@@ -115,58 +115,49 @@ function activeRowClass({ row }: { row: RoleItem }) {
   return currentRole.value?.roleId === row.roleId ? 'active-row' : ''
 }
 
-const mockPermissions: PermissionNode[] = [
-  {
-    permissionId: '1', permissionName: '用户管理', permissionCode: 'user:manage',
-    parentId: '0', type: 'menu', path: '', sortOrder: 1,
-    children: [
-      { permissionId: '11', permissionName: '用户列表', permissionCode: 'user:list', parentId: '1', type: 'button', path: '', sortOrder: 1, children: [] },
-      { permissionId: '12', permissionName: '分配角色', permissionCode: 'user:assign', parentId: '1', type: 'button', path: '', sortOrder: 2, children: [] },
-      { permissionId: '13', permissionName: '权限配置', permissionCode: 'user:permission', parentId: '1', type: 'button', path: '', sortOrder: 3, children: [] }
-    ]
-  },
-  {
-    permissionId: '2', permissionName: '预约管理', permissionCode: 'appointment:manage',
-    parentId: '0', type: 'menu', path: '', sortOrder: 2,
-    children: [
-      { permissionId: '21', permissionName: '预约挂号', permissionCode: 'appointment:book', parentId: '2', type: 'button', path: '', sortOrder: 1, children: [] },
-      { permissionId: '22', permissionName: '排班管理', permissionCode: 'schedule:manage', parentId: '2', type: 'button', path: '', sortOrder: 2, children: [] },
-      { permissionId: '23', permissionName: '挂号记录', permissionCode: 'appointment:list', parentId: '2', type: 'button', path: '', sortOrder: 3, children: [] },
-      { permissionId: '24', permissionName: '取消预约', permissionCode: 'appointment:cancel', parentId: '2', type: 'button', path: '', sortOrder: 4, children: [] }
-    ]
-  },
-  {
-    permissionId: '3', permissionName: '诊疗管理', permissionCode: 'medical:manage',
-    parentId: '0', type: 'menu', path: '', sortOrder: 3,
-    children: [
-      { permissionId: '31', permissionName: '病历管理', permissionCode: 'medical:record', parentId: '3', type: 'button', path: '', sortOrder: 1, children: [] },
-      { permissionId: '32', permissionName: '处方管理', permissionCode: 'medical:prescription', parentId: '3', type: 'button', path: '', sortOrder: 2, children: [] },
-      { permissionId: '33', permissionName: '检查管理', permissionCode: 'medical:exam', parentId: '3', type: 'button', path: '', sortOrder: 3, children: [] }
-    ]
-  },
-  {
-    permissionId: '4', permissionName: '患者管理', permissionCode: 'patient:manage',
-    parentId: '0', type: 'menu', path: '', sortOrder: 4,
-    children: [
-      { permissionId: '41', permissionName: '新建档案', permissionCode: 'patient:create', parentId: '4', type: 'button', path: '', sortOrder: 1, children: [] },
-      { permissionId: '42', permissionName: '患者列表', permissionCode: 'patient:list', parentId: '4', type: 'button', path: '', sortOrder: 2, children: [] },
-      { permissionId: '43', permissionName: '编辑档案', permissionCode: 'patient:edit', parentId: '4', type: 'button', path: '', sortOrder: 3, children: [] }
-    ]
-  },
-  {
-    permissionId: '5', permissionName: '系统管理', permissionCode: 'system:manage',
-    parentId: '0', type: 'menu', path: '', sortOrder: 5,
-    children: [
-      { permissionId: '51', permissionName: '系统用户', permissionCode: 'system:user', parentId: '5', type: 'button', path: '', sortOrder: 1, children: [] },
-      { permissionId: '52', permissionName: '系统配置', permissionCode: 'system:config', parentId: '5', type: 'button', path: '', sortOrder: 2, children: [] }
-    ]
+const allPermissions = ref<Permission[]>([])  // 平铺的原始权限数据
+const permLoading = ref(false)
+
+/** 将平铺权限列表转换为树形结构 */
+function buildTree(flat: Permission[]): PermissionNode[] {
+  const map = new Map<string, PermissionNode>()
+  const roots: PermissionNode[] = []
+
+  // 先创建所有节点
+  for (const p of flat) {
+    map.set(p.permissionId, { ...p, children: [] })
   }
-]
+
+  // 构建父子关系
+  for (const p of flat) {
+    const node = map.get(p.permissionId)!
+    if (p.parentId === '0' || !map.has(p.parentId)) {
+      roots.push(node)
+    } else {
+      map.get(p.parentId)?.children.push(node)
+    }
+  }
+
+  return roots
+}
 
 onMounted(async () => {
-  permissionTree.value = mockPermissions
-  await loadRoles()
+  await Promise.all([loadPermissions(), loadRoles()])
 })
+
+async function loadPermissions() {
+  permLoading.value = true
+  try {
+    const res = await getPermissionTreeApi()
+    allPermissions.value = res.data as Permission[]
+    permissionTree.value = buildTree(allPermissions.value)
+  } catch {
+    allPermissions.value = []
+    permissionTree.value = []
+  } finally {
+    permLoading.value = false
+  }
+}
 
 async function loadRoles() {
   roleLoading.value = true
@@ -187,10 +178,14 @@ async function handleRoleClick(role: RoleItem) {
   currentRole.value = role
   allChecked.value = false
 
+  const treeData = allPermissions.value.length > 0
+    ? buildTree(allPermissions.value)
+    : []
+
   // 超级管理员：禁用所有节点，默认全选
   if (role.roleCode === 'admin') {
-    permissionTree.value = addDisabledToTree(mockPermissions, true)
-    const allIds = getAllNodeIds(mockPermissions)
+    permissionTree.value = addDisabledToTree(treeData, true)
+    const allIds = getAllNodeIds(treeData)
     setTimeout(() => {
       treeRef.value?.setCheckedKeys(allIds)
     }, 50)
@@ -199,7 +194,7 @@ async function handleRoleClick(role: RoleItem) {
   }
 
   // 普通角色：取消禁用，加载已分配的权限
-  permissionTree.value = addDisabledToTree(mockPermissions, false)
+  permissionTree.value = addDisabledToTree(treeData, false)
 
   try {
     const res = await getPermissionsApi(role.roleId)

@@ -2,6 +2,7 @@ package com.cloudbrain.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -14,4 +15,6 @@ public class UserInfoVO {
     private String avatarUrl;
     private Integer userType;
     private String role;
+    private Integer status;
+    private LocalDateTime createTime;
 }

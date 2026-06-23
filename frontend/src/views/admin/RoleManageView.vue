@@ -85,6 +85,34 @@
                     />
                   </el-select>
                 </el-form-item>
+                <el-form-item v-if="isDoctorRole" label="挂号费">
+                  <el-input
+                    v-model="selectedConsultationFee"
+                    type="number"
+                    placeholder="未分配"
+                    :min="0"
+                    :step="0.01"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                <el-form-item v-if="isDoctorRole" label="专长">
+                  <el-input
+                    v-model="selectedSpecialty"
+                    placeholder="如：心血管疾病、呼吸系统疾病"
+                    maxlength="200"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                <el-form-item v-if="isDoctorRole" label="简介">
+                  <el-input
+                    v-model="selectedIntroduction"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="医生简介"
+                    maxlength="500"
+                    show-word-limit
+                  />
+                </el-form-item>
                 <el-form-item>
                   <el-button type="primary" :loading="assignLoading" @click="handleAssign" round>
                     确认分配
@@ -121,6 +149,9 @@ const selectedUser = ref<UserRow | null>(null)
 const selectedRoleId = ref('')
 const selectedDepartmentId = ref('')
 const selectedTitle = ref('')
+const selectedConsultationFee = ref<number | undefined>(undefined)
+const selectedSpecialty = ref('')
+const selectedIntroduction = ref('')
 const assignLoading = ref(false)
 
 const titles = ['主任医师', '副主任医师', '主治医师', '住院医师', '主任药师', '副主任药师']
@@ -174,11 +205,19 @@ async function handleUserClick(row: UserRow) {
   selectedRoleId.value = ''
   selectedDepartmentId.value = ''
   selectedTitle.value = ''
+  selectedConsultationFee.value = undefined
+  selectedSpecialty.value = ''
+  selectedIntroduction.value = ''
 
   try {
     const res = await getUserRoleApi(row.userId)
-    const roleData = res.data as any
+    const roleData = res.data
     selectedRoleId.value = roleData.roleId || ''
+    selectedDepartmentId.value = roleData.departmentId || ''
+    selectedTitle.value = roleData.title || ''
+    selectedConsultationFee.value = roleData.consultationFee ?? undefined
+    selectedSpecialty.value = roleData.specialty || ''
+    selectedIntroduction.value = roleData.introduction || ''
   } catch {
     selectedRoleId.value = ''
   }
@@ -189,6 +228,9 @@ function resetSelection() {
   selectedRoleId.value = ''
   selectedDepartmentId.value = ''
   selectedTitle.value = ''
+  selectedConsultationFee.value = undefined
+  selectedSpecialty.value = ''
+  selectedIntroduction.value = ''
 }
 
 async function handleAssign() {
@@ -203,7 +245,10 @@ async function handleAssign() {
       userId: selectedUser.value.userId,
       roleId: selectedRoleId.value,
       departmentId: isDoctorRole.value && selectedDepartmentId.value ? selectedDepartmentId.value : undefined,
-      title: isDoctorRole.value && selectedTitle.value ? selectedTitle.value : undefined
+      title: isDoctorRole.value && selectedTitle.value ? selectedTitle.value : undefined,
+      consultationFee: isDoctorRole.value ? selectedConsultationFee.value : undefined,
+      specialty: isDoctorRole.value && selectedSpecialty.value ? selectedSpecialty.value : undefined,
+      introduction: isDoctorRole.value && selectedIntroduction.value ? selectedIntroduction.value : undefined
     })
     ElMessage.success('分配成功')
     const role = roles.value.find(r => r.roleId === selectedRoleId.value)

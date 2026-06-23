@@ -2,6 +2,7 @@ package com.cloudbrain.service.user;
 
 import com.cloudbrain.dto.request.RoleAssignRequest;
 import com.cloudbrain.dto.request.PermissionUpdateRequest;
+import com.cloudbrain.dto.response.UserRoleVO;
 import com.cloudbrain.entity.Permission;
 import com.cloudbrain.entity.Role;
 
@@ -18,8 +19,11 @@ public interface RoleService {
     /** 查询指定角色的权限列表 */
     List<Permission> getPermissions(String roleId);
 
-    /** 查询指定用户的角色信息 */
-    Role getUserRole(String userId);
+    /** 查询指定用户的角色信息（若为医生则附带科室和职位） */
+    UserRoleVO getUserRole(String userId);
+
+    /** 获取所有权限列表（平铺） */
+    List<Permission> listAllPermissions();
 
     /** 更新角色权限配置（先清后插，仅管理员） */
     void updatePermission(PermissionUpdateRequest request);

@@ -1,6 +1,7 @@
 package com.cloudbrain.service.user.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.LoginRequest;
@@ -9,10 +10,16 @@ import com.cloudbrain.dto.request.ResetPasswordRequest;
 import com.cloudbrain.dto.request.UserUpdateRequest;
 import com.cloudbrain.dto.response.LoginResponse;
 import com.cloudbrain.dto.response.UserInfoVO;
+import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.entity.Patient;
 import com.cloudbrain.entity.Role;
+import com.cloudbrain.entity.SystemUser;
 import com.cloudbrain.entity.User;
 import com.cloudbrain.entity.UserRole;
+import com.cloudbrain.mapper.DoctorMapper;
+import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.mapper.RoleMapper;
+import com.cloudbrain.mapper.SystemUserMapper;
 import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.mapper.UserRoleMapper;
 import com.cloudbrain.security.JwtUtil;
@@ -36,10 +43,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final PasswordEncoder passwordEncoder;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
+    private final DoctorMapper doctorMapper;
+    private final PatientMapper patientMapper;
+    private final SystemUserMapper systemUserMapper;
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        User user = lambdaQuery().eq(User::getUsername, request.getUserName()).one();
+        LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery(User.class)
+                .eq(User::getUsername, request.getUserName());
+        if (request.getUserType() != null) {
+            wrapper.eq(User::getUserType, request.getUserType());
+        }
+        User user = baseMapper.selectOne(wrapper);
         if (user == null) {
             throw new BusinessException("用户名或密码错误");
         }
@@ -93,9 +108,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     @Transactional
     public String register(RegisterRequest request) {
-        Long count = lambdaQuery().eq(User::getUsername, request.getUserName()).count();
+        Long count = baseMapper.countByUsername(request.getUserName());
         if (count > 0) {
             throw new BusinessException("用户名已存在");
+        }
+
+        // 校验用户类型：公开注册仅允许患者，管理员创建可指定任意类型
+        if (request.getUserType() != null && request.getUserType() != 2) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            boolean isAdmin = auth != null && auth.isAuthenticated()
+                    && auth.getPrincipal() instanceof User
+                    && ((User) auth.getPrincipal()).getUserType() != null
+                    && ((User) auth.getPrincipal()).getUserType() == 1;
+            if (!isAdmin) {
+                throw new BusinessException("仅允许注册患者账号");
+            }
         }
 
         User user = new User();
@@ -124,9 +151,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return user.getUserId();
     }
 
-    /** 获取所有用户列表（含角色信息，仅管理员） */
+    /** 获取所有用户列表（含角色信息，仅管理员），可按用户类型筛选 */
     @Override
-    public List<UserInfoVO> listAllUsers() {
+    public List<UserInfoVO> listAllUsers(Integer userType) {
         // 校验管理员权限
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
@@ -137,8 +164,70 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException("无操作权限，仅管理员可执行此操作");
         }
 
-        List<User> users = lambdaQuery().orderByAsc(User::getCreateTime).list();
+        LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery(User.class)
+                .orderByAsc(User::getCreateTime);
+        if (userType != null) {
+            wrapper.eq(User::getUserType, userType);
+        }
+        List<User> users = baseMapper.selectList(wrapper);
         return users.stream().map(this::buildUserInfo).toList();
+    }
+
+    /** 启用/禁用用户（仅管理员） */
+    @Override
+    @Transactional
+    public void updateStatus(String userId, Integer status) {
+        // 校验管理员权限
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new BusinessException("未登录");
+        }
+        User current = (User) auth.getPrincipal();
+        if (current.getUserType() == null || current.getUserType() != 1) {
+            throw new BusinessException("无操作权限，仅管理员可执行此操作");
+        }
+
+        User user = baseMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getUserId, userId));
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        user.setStatus(status);
+        baseMapper.updateById(user);
+    }
+
+    /** 删除用户（仅管理员，级联清理关联表） */
+    @Override
+    @Transactional
+    public void deleteUser(String userId) {
+        // 校验管理员权限
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new BusinessException("未登录");
+        }
+        User current = (User) auth.getPrincipal();
+        if (current.getUserType() == null || current.getUserType() != 1) {
+            throw new BusinessException("无操作权限，仅管理员可执行此操作");
+        }
+
+        User user = baseMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getUserId, userId));
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+
+        // 级联删除关联表数据
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
+                .eq(UserRole::getUserId, userId));
+        doctorMapper.delete(new LambdaQueryWrapper<Doctor>()
+                .eq(Doctor::getUserId, userId));
+        patientMapper.delete(new LambdaQueryWrapper<Patient>()
+                .eq(Patient::getUserId, userId));
+        systemUserMapper.delete(new LambdaQueryWrapper<SystemUser>()
+                .eq(SystemUser::getUserId, userId));
+
+        // 逻辑删除用户本身
+        baseMapper.deleteById(user.getId());
     }
 
     /** 获取当前用户实体（含密码，仅内部使用） */
@@ -170,6 +259,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .avatarUrl(user.getAvatarUrl())
                 .userType(user.getUserType())
                 .role(roleName)
+                .status(user.getStatus())
+                .createTime(user.getCreateTime())
                 .build();
     }
 }

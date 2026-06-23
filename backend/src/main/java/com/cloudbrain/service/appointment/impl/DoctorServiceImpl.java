@@ -3,6 +3,7 @@ package com.cloudbrain.service.appointment.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloudbrain.common.exception.BusinessException;
+import com.cloudbrain.dto.request.DoctorUpdateRequest;
 import com.cloudbrain.dto.response.DoctorVO;
 import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.User;
@@ -41,6 +42,37 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor> impleme
             throw new BusinessException("医生不存在");
         }
         return toVO(doc);
+    }
+
+    @Override
+    public DoctorVO getByUserId(String userId) {
+        Doctor doc = this.getOne(new LambdaQueryWrapper<Doctor>().eq(Doctor::getUserId, userId));
+        if (doc == null) {
+            throw new BusinessException("医生不存在");
+        }
+        return toVO(doc);
+    }
+
+    @Override
+    public void updateDoctor(DoctorUpdateRequest request) {
+        Doctor doctor;
+        if (request.getDoctorId() != null) {
+            doctor = this.getOne(new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, request.getDoctorId()));
+        } else if (request.getUserId() != null) {
+            doctor = this.getOne(new LambdaQueryWrapper<Doctor>().eq(Doctor::getUserId, request.getUserId()));
+        } else {
+            throw new BusinessException("医生ID或用户ID不能为空");
+        }
+        if (doctor == null) {
+            throw new BusinessException("医生不存在");
+        }
+        if (request.getSpecialty() != null) {
+            doctor.setSpecialty(request.getSpecialty());
+        }
+        if (request.getIntroduction() != null) {
+            doctor.setIntroduction(request.getIntroduction());
+        }
+        this.updateById(doctor);
     }
 
     private DoctorVO toVO(Doctor doc) {

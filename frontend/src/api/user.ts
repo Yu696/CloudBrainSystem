@@ -1,8 +1,8 @@
 import request from '@/utils/request'
-import type { LoginResponse, UserInfoVO, Role, Permission } from '@/types/user'
+import type { LoginResponse, UserInfoVO, Role, Permission, UserRoleVO } from '@/types/user'
 
 /** 登录 */
-export function loginApi(data: { userName: string; password: string }) {
+export function loginApi(data: { userName: string; password: string; userType?: number }) {
   return request.post<LoginResponse>('/user/login', data)
 }
 
@@ -39,7 +39,15 @@ export function listAllRolesApi() {
 }
 
 /** 分配角色 */
-export function assignRoleApi(data: { userId: string; roleId: string; departmentId?: string; title?: string }) {
+export function assignRoleApi(data: {
+  userId: string
+  roleId: string
+  departmentId?: string
+  title?: string
+  consultationFee?: number
+  specialty?: string
+  introduction?: string
+}) {
   return request.post<string>('/role/assign', data)
 }
 
@@ -48,14 +56,29 @@ export function getPermissionsApi(roleId?: string) {
   return request.get<Permission[]>('/role/permissions', { params: { roleId } })
 }
 
-/** 查询用户角色 */
+/** 查询用户角色（若为医生则附带科室和职位） */
 export function getUserRoleApi(userId: string) {
-  return request.get<Role>('/role/user-role', { params: { userId } })
+  return request.get<UserRoleVO>('/role/user-role', { params: { userId } })
 }
 
-/** 获取所有用户列表（管理员） */
-export function listAllUsersApi() {
-  return request.get<UserInfoVO[]>('/user/list-all')
+/** 获取所有用户列表（管理员），可按用户类型筛选 */
+export function listAllUsersApi(userType?: number) {
+  return request.get<UserInfoVO[]>('/user/list-all', { params: { userType } })
+}
+
+/** 获取完整权限树列表 */
+export function getPermissionTreeApi() {
+  return request.get<Permission[]>('/role/permission-tree')
+}
+
+/** 启用/禁用用户（管理员） */
+export function updateUserStatusApi(data: { userId: string; status: number }) {
+  return request.put<string>('/user/status', data)
+}
+
+/** 删除用户（管理员） */
+export function deleteUserApi(userId: string) {
+  return request.delete<string>('/user/delete', { params: { userId } })
 }
 
 /** 更新角色权限 */

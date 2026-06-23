@@ -62,55 +62,55 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/UserAddView.vue'),
         meta: { title: '新增用户', admin: true }
       },
-      // M02 患者档案
+      // M02 患者档案（仅医生和管理员）
       {
         path: 'patient/create',
         name: 'PatientCreate',
         component: () => import('@/views/patient/PatientCreateView.vue'),
-        meta: { title: '新建档案' }
+        meta: { title: '新建档案', roles: ['doctor', 'admin'] }
       },
       {
         path: 'patient/list',
         name: 'PatientList',
         component: () => import('@/views/patient/PatientListView.vue'),
-        meta: { title: '患者列表' }
+        meta: { title: '患者列表', roles: ['doctor', 'admin'] }
       },
       {
         path: 'patient/detail/:id',
         name: 'PatientDetail',
         component: () => import('@/views/patient/PatientDetailView.vue'),
-        meta: { title: '档案详情' }
+        meta: { title: '档案详情', roles: ['doctor', 'admin'] }
       },
-      // M06 预约管理
+      // M06 预约管理（患者和管理员）
       {
         path: 'appointment/dept',
         name: 'DeptSelect',
         component: () => import('@/views/appointment/DeptSelectView.vue'),
-        meta: { title: '科室选择' }
+        meta: { title: '科室选择', roles: ['patient', 'admin'] }
       },
       {
         path: 'appointment/doctor',
         name: 'DoctorSelect',
         component: () => import('@/views/appointment/DoctorSelectView.vue'),
-        meta: { title: '医生选择' }
+        meta: { title: '医生选择', roles: ['patient', 'admin'] }
       },
       {
         path: 'appointment/confirm',
         name: 'AppointmentConfirm',
         component: () => import('@/views/appointment/AppointmentConfirmView.vue'),
-        meta: { title: '预约确认' }
+        meta: { title: '预约确认', roles: ['patient', 'admin'] }
       },
       {
         path: 'appointment/pay/:id',
         name: 'Payment',
         component: () => import('@/views/appointment/PaymentView.vue'),
-        meta: { title: '支付' }
+        meta: { title: '支付', roles: ['patient', 'admin'] }
       },
       {
         path: 'appointment/records',
         name: 'AppointmentList',
         component: () => import('@/views/appointment/AppointmentListView.vue'),
-        meta: { title: '挂号记录' }
+        meta: { title: '挂号记录', roles: ['patient', 'admin'] }
       },
       {
         path: 'admin/schedule',
@@ -151,6 +151,13 @@ router.beforeEach((to, _from, next) => {
 
   // 管理员页面权限校验
   if (to.meta.admin && !userStore.isAdmin) {
+    next('/dashboard')
+    return
+  }
+
+  // 角色页面权限校验
+  const routeRoles = to.meta.roles as string[] | undefined
+  if (routeRoles && routeRoles.length > 0 && !userStore.hasRole(...routeRoles)) {
     next('/dashboard')
     return
   }

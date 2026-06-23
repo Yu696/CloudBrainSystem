@@ -26,6 +26,12 @@ public interface UserService {
     /** 用户注册，校验用户名唯一性，返回用户 ID */
     String register(RegisterRequest request);
 
-    /** 获取所有用户列表（含角色信息，仅管理员） */
-    List<UserInfoVO> listAllUsers();
+    /** 获取所有用户列表（含角色信息，仅管理员），可按用户类型筛选 */
+    List<UserInfoVO> listAllUsers(Integer userType);
+
+    /** 启用/禁用用户（仅管理员） */
+    void updateStatus(String userId, Integer status);
+
+    /** 删除用户（仅管理员） */
+    void deleteUser(String userId);
 }

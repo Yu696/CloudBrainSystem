@@ -36,14 +36,14 @@
 
     <el-row :gutter="24">
       <!-- 个人信息编辑 -->
-      <el-col :span="14">
+      <el-col :span="isDoctor ? 8 : 14">
         <div class="cb-card">
           <div class="cb-card-header">
             <el-icon class="header-icon"><Edit /></el-icon>
             <span>编辑个人信息</span>
           </div>
           <div class="cb-card-body">
-            <el-form ref="infoFormRef" :model="infoForm" :rules="infoRules" label-width="90px" class="form-section">
+            <el-form ref="infoFormRef" :model="infoForm" :rules="infoRules" label-width="80px" class="form-section">
               <el-form-item label="真实姓名" prop="realName">
                 <el-input v-model="infoForm.realName" placeholder="请输入真实姓名" />
               </el-form-item>
@@ -54,7 +54,7 @@
                 <el-input v-model="infoForm.email" placeholder="请输入邮箱地址" />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" :loading="saveLoading" @click="handleUpdate">
+                <el-button type="primary" :loading="saveLoading" @click="handleUpdate" style="width: 100%">
                   保存修改
                 </el-button>
               </el-form-item>
@@ -63,23 +63,57 @@
         </div>
       </el-col>
 
+      <!-- 医生信息编辑 -->
+      <el-col v-if="isDoctor" :span="8">
+        <div class="cb-card">
+          <div class="cb-card-header">
+            <el-icon class="header-icon"><UserFilled /></el-icon>
+            <span>医生信息</span>
+          </div>
+          <div class="cb-card-body">
+            <el-form :model="docForm" label-width="0" class="form-section">
+              <el-form-item label="" class="compact-item">
+                <label class="doc-field-label">专长</label>
+                <el-input v-model="docForm.specialty" placeholder="如：心血管疾病、呼吸系统疾病" maxlength="200" />
+              </el-form-item>
+              <el-form-item label="" class="compact-item">
+                <label class="doc-field-label">个人简介</label>
+                <el-input
+                  v-model="docForm.introduction"
+                  type="textarea"
+                  :rows="5"
+                  placeholder="输入个人简介"
+                  maxlength="500"
+                  show-word-limit
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :loading="docSaveLoading" @click="handleUpdateDoctor" style="width: 100%">
+                  保存医生信息
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+      </el-col>
+
       <!-- 修改密码 -->
-      <el-col :span="10">
+      <el-col :span="isDoctor ? 8 : 10">
         <div class="cb-card">
           <div class="cb-card-header">
             <el-icon class="header-icon"><Lock /></el-icon>
             <span>修改密码</span>
           </div>
           <div class="cb-card-body">
-            <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="80px" class="form-section">
-              <el-form-item label="旧密码" prop="oldPassword">
-                <el-input v-model="pwdForm.oldPassword" type="password" show-password placeholder="输入旧密码" />
+            <el-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-width="0" class="form-section">
+              <el-form-item prop="oldPassword">
+                <el-input v-model="pwdForm.oldPassword" type="password" show-password placeholder="旧密码" />
               </el-form-item>
-              <el-form-item label="新密码" prop="newPassword">
-                <el-input v-model="pwdForm.newPassword" type="password" show-password placeholder="输入新密码" />
+              <el-form-item prop="newPassword">
+                <el-input v-model="pwdForm.newPassword" type="password" show-password placeholder="新密码" />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" :loading="pwdLoading" @click="handleResetPwd">
+                <el-button type="primary" :loading="pwdLoading" @click="handleResetPwd" style="width: 100%">
                   确认修改
                 </el-button>
               </el-form-item>
@@ -94,16 +128,29 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Edit, Lock } from '@element-plus/icons-vue'
+import { Edit, Lock, UserFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { updateUserApi, resetPasswordApi } from '@/api/user'
+import { getDoctorByUserIdApi, updateDoctorApi } from '@/api/doctor'
 
 const userStore = useUserStore()
 
 const userTypeLabel = computed(() => {
   const map: Record<number, string> = { 0: '医生', 1: '管理员', 2: '患者', 3: '医生' }
   return map[userStore.userInfo?.userType ?? 2] || '未知'
+})
+
+const isDoctor = computed(() => {
+  const type = userStore.userInfo?.userType
+  return type === 0 || type === 3
+})
+
+// 医生信息表单
+const docSaveLoading = ref(false)
+const docForm = reactive({
+  specialty: '',
+  introduction: ''
 })
 
 // 个人信息表单
@@ -129,6 +176,18 @@ onMounted(async () => {
     infoForm.phone = userStore.userInfo.phone || ''
     infoForm.email = userStore.userInfo.email || ''
   }
+  if (isDoctor.value && userStore.userInfo?.userId) {
+    try {
+      const res = await getDoctorByUserIdApi(userStore.userInfo.userId)
+      const doc = res.data
+      if (doc) {
+        docForm.specialty = doc.specialty || ''
+        docForm.introduction = doc.introduction || ''
+      }
+    } catch {
+      // 医生可能还未创建对应的 doctor 记录
+    }
+  }
 })
 
 async function handleUpdate() {
@@ -148,6 +207,22 @@ async function handleUpdate() {
     // 已处理
   } finally {
     saveLoading.value = false
+  }
+}
+
+async function handleUpdateDoctor() {
+  docSaveLoading.value = true
+  try {
+    await updateDoctorApi({
+      userId: userStore.userInfo?.userId,
+      specialty: docForm.specialty || undefined,
+      introduction: docForm.introduction || undefined
+    })
+    ElMessage.success('医生信息更新成功')
+  } catch {
+    // 已处理
+  } finally {
+    docSaveLoading.value = false
   }
 }
 
@@ -257,5 +332,26 @@ async function handleResetPwd() {
 
 .form-section {
   max-width: 100%;
+}
+
+.doc-field-label {
+  display: block;
+  font-size: var(--cb-font-xs);
+  color: var(--cb-text-placeholder);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.compact-item {
+  margin-bottom: 18px;
+}
+
+.compact-item:last-of-type {
+  margin-bottom: 0;
+}
+
+/* 密码框无标签时的占位调整 */
+.form-section :deep(.el-form-item__content) {
+  width: 100%;
 }
 </style>

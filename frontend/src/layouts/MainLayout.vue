@@ -29,8 +29,8 @@
           <template #title>个人信息</template>
         </el-menu-item>
 
-        <!-- 患者档案 -->
-        <el-sub-menu index="patient">
+        <!-- 患者档案（仅医生和管理员） -->
+        <el-sub-menu v-if="userStore.hasRole('doctor', 'admin')" index="patient">
           <template #title>
             <el-icon><UserFilled /></el-icon>
             <span>患者档案</span>
@@ -45,8 +45,8 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 预约挂号 -->
-        <el-sub-menu index="appointment">
+        <!-- 预约挂号（患者和管理员） -->
+        <el-sub-menu v-if="userStore.hasRole('patient', 'admin')" index="appointment">
           <template #title>
             <el-icon><Calendar /></el-icon>
             <span>预约挂号</span>

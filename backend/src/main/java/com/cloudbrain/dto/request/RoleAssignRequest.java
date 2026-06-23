@@ -11,4 +11,7 @@ public class RoleAssignRequest {
     private String roleId;
     private String departmentId;   // 可选，分配医生角色时指定科室
     private String title;          // 可选，分配医生角色时指定职位
+    private java.math.BigDecimal consultationFee; // 可选，分配医生角色时指定挂号费
+    private String specialty;                     // 可选，医生专长
+    private String introduction;                  // 可选，医生简介
 }
