@@ -172,23 +172,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userRole.setRoleId(defaultRoleId);
         userRoleMapper.insert(userRole);
 
-        // 患者类型自动创建 patient 档案（userId 关联，未填字段给空值占位）
+        // 患者类型自动创建 patient 档案（只填注册时的基本信息，其余字段后续在个人信息中完善）
         if (user.getUserType() == 2) {
             Patient patient = new Patient();
             patient.setPatientId(UUIDUtil.generatePatientId());
             patient.setUserId(user.getUserId());
             patient.setMedicalRecordNo(UUIDUtil.generateMedicalRecordNo());
             patient.setName(user.getRealName());
-            patient.setIdCard("");
-            patient.setGender(0);
             patient.setPhone(user.getPhone());
-            patient.setEmergencyPhone("");
-            patient.setAddress("");
-            patient.setBloodType("");
-            patient.setAllergyHistory("");
-            patient.setGeneticDiseases("");
-            patient.setMedicalHistory("");
-            patient.setQrCodeUrl("");
             patient.setSource(1);
             patient.setStatus(1);
             patientMapper.insert(patient);
