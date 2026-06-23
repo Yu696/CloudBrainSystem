@@ -37,13 +37,6 @@
             @keyup.enter="handleLogin"
           />
         </el-form-item>
-        <el-form-item prop="userType">
-          <el-radio-group v-model="form.userType" class="login-user-type">
-            <el-radio-button :value="2">患者</el-radio-button>
-            <el-radio-button :value="0">医生</el-radio-button>
-            <el-radio-button :value="1">管理员</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" class="login-btn" @click="handleLogin" round>
             <span v-if="!loading">登 录</span>
@@ -75,7 +68,6 @@ const loading = ref(false)
 const form = reactive({
   userName: '',
   password: '',
-  userType: 2
 })
 
 const rules: FormRules = {
@@ -89,7 +81,7 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    await userStore.login(form.userName, form.password, form.userType)
+    await userStore.login(form.userName, form.password)
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch {
@@ -200,15 +192,6 @@ async function handleLogin() {
 
 .login-form {
   margin-bottom: 8px;
-}
-
-.login-user-type {
-  display: flex;
-  width: 100%;
-}
-.login-user-type :deep(.el-radio-button__inner) {
-  width: 100%;
-  justify-content: center;
 }
 
 .login-input :deep(.el-input__wrapper) {
