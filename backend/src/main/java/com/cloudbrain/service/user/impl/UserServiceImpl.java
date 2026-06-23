@@ -95,10 +95,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 patient.setMedicalRecordNo(UUIDUtil.generateMedicalRecordNo());
                 patient.setStatus(1);
             }
+            // 校验唯一字段是否与其他患者冲突
+            if (request.getIdCard() != null && !request.getIdCard().equals(patient.getIdCard())) {
+                if (patientMapper.selectCount(
+                        new LambdaQueryWrapper<Patient>().eq(Patient::getIdCard, request.getIdCard())) > 0) {
+                    throw new BusinessException("该身份证号已被其他用户绑定，请检查后重试");
+                }
+                patient.setIdCard(request.getIdCard());
+            }
+            if (request.getPhone() != null && !request.getPhone().equals(patient.getPhone())) {
+                if (patientMapper.selectCount(
+                        new LambdaQueryWrapper<Patient>().eq(Patient::getPhone, request.getPhone())) > 0) {
+                    throw new BusinessException("该手机号已被其他用户绑定，请更换手机号");
+                }
+                patient.setPhone(request.getPhone());
+            }
+
             if (request.getName() != null) patient.setName(request.getName());
             else if (request.getRealName() != null) patient.setName(request.getRealName());
-            if (request.getPhone() != null) patient.setPhone(request.getPhone());
-            if (request.getIdCard() != null) patient.setIdCard(request.getIdCard());
             if (request.getGender() != null) patient.setGender(request.getGender());
             if (request.getBirthDate() != null) patient.setBirthDate(request.getBirthDate());
             if (request.getEmergencyPhone() != null) patient.setEmergencyPhone(request.getEmergencyPhone());
