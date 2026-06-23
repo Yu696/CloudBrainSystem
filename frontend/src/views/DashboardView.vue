@@ -78,22 +78,58 @@
                 <el-icon><User /></el-icon>
                 <span>个人信息</span>
               </el-button>
-              <el-button text class="quick-link-item" @click="router.push('/appointment/dept')">
-                <el-icon><Calendar /></el-icon>
-                <span>预约挂号</span>
-              </el-button>
-              <el-button text class="quick-link-item" @click="router.push('/appointment/records')">
-                <el-icon><List /></el-icon>
-                <span>挂号记录</span>
-              </el-button>
-              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/users')">
-                <el-icon><UserFilled /></el-icon>
-                <span>用户管理</span>
-              </el-button>
-              <el-button v-if="userStore.isAdmin" text class="quick-link-item" @click="router.push('/admin/role')">
-                <el-icon><User /></el-icon>
-                <span>角色管理</span>
-              </el-button>
+
+              <!-- 管理员快捷导航 -->
+              <template v-if="userStore.isAdmin">
+                <el-button text class="quick-link-item" @click="router.push('/admin/departments')">
+                  <el-icon><HomeFilled /></el-icon>
+                  <span>科室管理</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/admin/doctors')">
+                  <el-icon><FirstAidKit /></el-icon>
+                  <span>医生管理</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/admin/appointments')">
+                  <el-icon><Calendar /></el-icon>
+                  <span>预约管理</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/admin/medical-records')">
+                  <el-icon><Document /></el-icon>
+                  <span>病历管理</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/admin/users')">
+                  <el-icon><UserFilled /></el-icon>
+                  <span>用户管理</span>
+                </el-button>
+              </template>
+
+              <!-- 医生快捷导航 -->
+              <template v-if="userStore.isDoctor">
+                <el-button text class="quick-link-item" @click="router.push('/doctor/waiting')">
+                  <el-icon><List /></el-icon>
+                  <span>待诊列表</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/patient/list')">
+                  <el-icon><UserFilled /></el-icon>
+                  <span>患者列表</span>
+                </el-button>
+              </template>
+
+              <!-- 患者快捷导航 -->
+              <template v-if="userStore.isPatient">
+                <el-button text class="quick-link-item" @click="router.push('/appointment/dept')">
+                  <el-icon><Calendar /></el-icon>
+                  <span>预约挂号</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/appointment/records')">
+                  <el-icon><List /></el-icon>
+                  <span>挂号记录</span>
+                </el-button>
+                <el-button text class="quick-link-item" @click="router.push('/patient/records')">
+                  <el-icon><Document /></el-icon>
+                  <span>我的病历</span>
+                </el-button>
+              </template>
             </div>
           </div>
         </div>
@@ -105,7 +141,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, UserFilled, Document, TrendCharts, Calendar, List } from '@element-plus/icons-vue'
+import { User, UserFilled, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStatsApi } from '@/api/appointment'
 

@@ -25,9 +25,12 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> impl
     @Transactional
     public PatientCreateVO createPatient(PatientCreateRequest request) {
         // 校验身份证唯一性
-        Long count = lambdaQuery().eq(Patient::getIdCard, request.getIdCard()).count();
-        if (count > 0) {
-            throw new BusinessException("身份证号已存在");
+        if (lambdaQuery().eq(Patient::getIdCard, request.getIdCard()).count() > 0) {
+            throw new BusinessException("该身份证号已存在，请检查后重试");
+        }
+        // 校验手机号唯一性
+        if (lambdaQuery().eq(Patient::getPhone, request.getPhone()).count() > 0) {
+            throw new BusinessException("该手机号已被其他用户绑定，请更换手机号");
         }
 
         Patient patient = new Patient();
@@ -83,10 +86,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> impl
             throw new BusinessException("患者不存在");
         }
 
+        // 校验唯一字段是否与其他患者冲突
+        if (request.getPhone() != null && !request.getPhone().equals(patient.getPhone())) {
+            if (lambdaQuery().eq(Patient::getPhone, request.getPhone()).count() > 0) {
+                throw new BusinessException("该手机号已被其他用户绑定，请更换手机号");
+            }
+            patient.setPhone(request.getPhone());
+        }
+
         if (request.getName() != null) patient.setName(request.getName());
         if (request.getGender() != null) patient.setGender(request.getGender());
         if (request.getBirthDate() != null) patient.setBirthDate(request.getBirthDate());
-        if (request.getPhone() != null) patient.setPhone(request.getPhone());
         if (request.getEmergencyPhone() != null) patient.setEmergencyPhone(request.getEmergencyPhone());
         if (request.getAddress() != null) patient.setAddress(request.getAddress());
         if (request.getBloodType() != null) patient.setBloodType(request.getBloodType());
