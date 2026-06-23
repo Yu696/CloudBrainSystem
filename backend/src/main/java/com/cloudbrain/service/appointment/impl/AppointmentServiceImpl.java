@@ -5,12 +5,21 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.AppointmentBookRequest;
 import com.cloudbrain.dto.request.AppointmentCancelRequest;
+import com.cloudbrain.dto.response.AppointmentVO;
 import com.cloudbrain.entity.Appointment;
+import com.cloudbrain.entity.Department;
 import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.entity.Patient;
+import com.cloudbrain.entity.Schedule;
 import com.cloudbrain.entity.TimeSlot;
+import com.cloudbrain.entity.User;
 import com.cloudbrain.mapper.AppointmentMapper;
+import com.cloudbrain.mapper.DepartmentMapper;
 import com.cloudbrain.mapper.DoctorMapper;
+import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.ScheduleMapper;
 import com.cloudbrain.mapper.TimeSlotMapper;
+import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.service.appointment.AppointmentService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +38,10 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
     private final TimeSlotMapper timeSlotMapper;
     private final DoctorMapper doctorMapper;
+    private final ScheduleMapper scheduleMapper;
+    private final PatientMapper patientMapper;
+    private final DepartmentMapper departmentMapper;
+    private final UserMapper userMapper;
 
     @Override
     @Transactional
@@ -42,12 +56,19 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         // 校验时段状态
         if (slot.getStatus() == 1 && slot.getLockExpiryTime() != null
                 && slot.getLockExpiryTime().isBefore(LocalDateTime.now())) {
-            // 锁已过期，释放
+            // 锁已过期，释放并回补可用时段数
             slot.setStatus(0);
             slot.setLockToken(null);
             slot.setLockedBy(null);
             slot.setLockExpiryTime(null);
             timeSlotMapper.updateById(slot);
+
+            Schedule schedule = scheduleMapper.selectOne(
+                    new LambdaQueryWrapper<Schedule>().eq(Schedule::getScheduleId, slot.getScheduleId()));
+            if (schedule != null && schedule.getAvailableSlots() != null) {
+                schedule.setAvailableSlots(schedule.getAvailableSlots() + 1);
+                scheduleMapper.updateById(schedule);
+            }
         }
 
         if (slot.getStatus() != 0) {
@@ -59,6 +80,32 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, request.getDoctorId()));
         if (doctor == null) {
             throw new BusinessException("医生不存在");
+        }
+
+        // 校验医生是否接诊
+        if (doctor.getAvailable() != 1) {
+            throw new BusinessException("该医生当前不接诊");
+        }
+
+        // 校验医生当日预约量是否已满
+        long dailyCount = this.count(new LambdaQueryWrapper<Appointment>()
+                .eq(Appointment::getDoctorId, request.getDoctorId())
+                .eq(Appointment::getAppointmentDate, LocalDate.from(slot.getStartTime()))
+                .in(Appointment::getStatus, 0, 1));
+        if (dailyCount >= doctor.getMaxDailyPatients()) {
+            throw new BusinessException("该医生当日预约已满");
+        }
+
+        // 校验患者档案必要信息
+        Patient patient = patientMapper.selectOne(
+                new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, request.getPatientId()));
+        if (patient == null) {
+            throw new BusinessException("患者档案不存在");
+        }
+        if (patient.getName() == null || patient.getName().isEmpty()
+                || patient.getIdCard() == null || patient.getIdCard().isEmpty()
+                || patient.getPhone() == null || patient.getPhone().isEmpty()) {
+            throw new BusinessException("患者档案信息不完整，请先在个人信息中完善姓名、身份证号和手机号");
         }
 
         // 创建预约
@@ -85,6 +132,14 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         slot.setLockedBy(request.getPatientId());
         slot.setLockExpiryTime(LocalDateTime.now().plusMinutes(15));
         timeSlotMapper.updateById(slot);
+
+        // 扣减排班可用时段数
+        Schedule schedule = scheduleMapper.selectOne(
+                new LambdaQueryWrapper<Schedule>().eq(Schedule::getScheduleId, slot.getScheduleId()));
+        if (schedule != null && schedule.getAvailableSlots() != null && schedule.getAvailableSlots() > 0) {
+            schedule.setAvailableSlots(schedule.getAvailableSlots() - 1);
+            scheduleMapper.updateById(schedule);
+        }
 
         return appointment;
     }
@@ -117,6 +172,14 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 slot.setLockedBy(null);
                 slot.setLockExpiryTime(null);
                 timeSlotMapper.updateById(slot);
+
+                // 恢复排班可用时段数
+                Schedule schedule = scheduleMapper.selectOne(
+                        new LambdaQueryWrapper<Schedule>().eq(Schedule::getScheduleId, slot.getScheduleId()));
+                if (schedule != null && schedule.getAvailableSlots() != null) {
+                    schedule.setAvailableSlots(schedule.getAvailableSlots() + 1);
+                    scheduleMapper.updateById(schedule);
+                }
             }
         }
     }
@@ -143,6 +206,85 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         return this.list(new LambdaQueryWrapper<Appointment>()
                 .eq(Appointment::getDoctorId, doctorId)
                 .orderByDesc(Appointment::getCreateTime));
+    }
+
+    @Override
+    public List<AppointmentVO> listAll(String patientId, String doctorId, String date, Integer status) {
+        LambdaQueryWrapper<Appointment> wrapper = new LambdaQueryWrapper<Appointment>();
+        if (patientId != null && !patientId.isEmpty()) {
+            wrapper.eq(Appointment::getPatientId, patientId);
+        }
+        if (doctorId != null && !doctorId.isEmpty()) {
+            wrapper.eq(Appointment::getDoctorId, doctorId);
+        }
+        if (date != null && !date.isEmpty()) {
+            wrapper.eq(Appointment::getAppointmentDate, LocalDate.parse(date));
+        }
+        if (status != null) {
+            wrapper.eq(Appointment::getStatus, status);
+        }
+        List<Appointment> list = this.list(wrapper.orderByDesc(Appointment::getCreateTime));
+        return list.stream().map(this::toVO).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void delete(String appointmentId) {
+        Appointment appointment = this.getOne(new LambdaQueryWrapper<Appointment>()
+                .eq(Appointment::getAppointmentId, appointmentId));
+        if (appointment == null) {
+            throw new BusinessException("预约不存在");
+        }
+        this.removeById(appointment.getId());
+    }
+
+    private AppointmentVO toVO(Appointment a) {
+        String patientName = null;
+        String doctorName = null;
+        String departmentName = null;
+
+        if (a.getPatientId() != null) {
+            Patient p = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, a.getPatientId()));
+            if (p != null) patientName = p.getName();
+        }
+        if (a.getDoctorId() != null) {
+            Doctor d = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, a.getDoctorId()));
+            if (d != null && d.getUserId() != null) {
+                User u = userMapper.selectOne(
+                        new LambdaQueryWrapper<User>().eq(User::getUserId, d.getUserId()));
+                if (u != null) doctorName = u.getRealName();
+            }
+        }
+        if (a.getDepartmentId() != null) {
+            Department dept = departmentMapper.selectOne(
+                    new LambdaQueryWrapper<Department>().eq(Department::getDepartmentId, a.getDepartmentId()));
+            if (dept != null) departmentName = dept.getName();
+        }
+
+        return AppointmentVO.builder()
+                .appointmentId(a.getAppointmentId())
+                .patientId(a.getPatientId())
+                .patientName(patientName)
+                .doctorId(a.getDoctorId())
+                .doctorName(doctorName)
+                .departmentId(a.getDepartmentId())
+                .departmentName(departmentName)
+                .scheduleId(a.getScheduleId())
+                .timeSlotId(a.getTimeSlotId())
+                .appointmentDate(a.getAppointmentDate())
+                .timeSlotDesc(a.getTimeSlotDesc())
+                .appointmentType(a.getAppointmentType())
+                .symptoms(a.getSymptoms())
+                .source(a.getSource())
+                .status(a.getStatus())
+                .paymentStatus(a.getPaymentStatus())
+                .totalFee(a.getTotalFee())
+                .cancelReason(a.getCancelReason())
+                .createTime(a.getCreateTime())
+                .updateTime(a.getUpdateTime())
+                .build();
     }
 
     private String formatTimeSlot(TimeSlot slot) {

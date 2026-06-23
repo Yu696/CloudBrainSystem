@@ -59,14 +59,15 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         schedule.setEndTime(request.getEndTime());
         schedule.setSlotDuration(slotDuration);
         schedule.setMaxPatients(maxPatients);
-        schedule.setAvailableSlots(maxPatients);
         schedule.setStatus(1);
         schedule.setRemark(request.getRemark());
 
         this.save(schedule);
 
-        // 自动生成时段
-        generateTimeSlots(schedule);
+        // 自动生成时段，availableSlots 用实际生成的时段数
+        int slotCount = generateTimeSlots(schedule);
+        schedule.setAvailableSlots(slotCount);
+        this.updateById(schedule);
 
         return schedule;
     }
@@ -95,12 +96,13 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
                 .eq(TimeSlot::getStatus, 0));
     }
 
-    private void generateTimeSlots(Schedule schedule) {
+    private int generateTimeSlots(Schedule schedule) {
         LocalTime start = schedule.getStartTime();
         LocalTime end = schedule.getEndTime();
         int duration = schedule.getSlotDuration();
         LocalDate date = schedule.getScheduleDate();
 
+        int count = 0;
         LocalTime current = start;
         while (current.plusMinutes(duration).isBefore(end) || current.plusMinutes(duration).equals(end)) {
             TimeSlot slot = new TimeSlot();
@@ -114,6 +116,8 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             timeSlotMapper.insert(slot);
 
             current = current.plusMinutes(duration);
+            count++;
         }
+        return count;
     }
 }

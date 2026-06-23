@@ -1,11 +1,14 @@
 package com.cloudbrain.dto.request;
 
 import lombok.Data;
+import java.math.BigDecimal;
 
 @Data
 public class DoctorUpdateRequest {
-    private String doctorId;
-    private String userId;        // 按 userId 查找（医生自编辑时用）
+    private String departmentId;
+    private String title;
     private String specialty;
     private String introduction;
+    private BigDecimal consultationFee;
+    private Integer maxDailyPatients;
 }

@@ -45,7 +45,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         payment.setPatientId(request.getPatientId());
         payment.setAmount(appointment.getTotalFee());
         payment.setPaymentMethod(request.getPaymentMethod());
-        payment.setPaymentStatus(2);
+        payment.setPaymentStatus(1);  // 0=待支付 1=已支付 2=已退款
         payment.setTradeNo("TRD_" + System.currentTimeMillis());
         payment.setPaymentTime(LocalDateTime.now());
 

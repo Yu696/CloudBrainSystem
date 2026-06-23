@@ -8,8 +8,21 @@ export interface UserInfoVO {
   avatarUrl: string
   userType: number
   role: string | null
-  status?: number
-  createTime?: string
+  status: number
+  createTime: string
+  // 患者档案字段（仅 userType=2 时有值）
+  patientId?: string
+  medicalRecordNo?: string
+  name?: string
+  idCard?: string
+  gender?: number
+  birthDate?: string
+  emergencyPhone?: string
+  address?: string
+  bloodType?: string
+  allergyHistory?: string
+  geneticDiseases?: string
+  medicalHistory?: string
 }
 
 /** 登录响应 */
@@ -18,16 +31,7 @@ export interface LoginResponse {
   userInfo: UserInfoVO
 }
 
-/** 角色 */
-export interface Role {
-  roleId: string
-  roleName: string
-  roleCode: string
-  description: string
-  status: number
-}
-
-/** 用户角色 VO（含医生专属字段） */
+/** 用户角色 VO（含医生扩展信息） */
 export interface UserRoleVO {
   roleId: string
   roleName: string
@@ -39,6 +43,15 @@ export interface UserRoleVO {
   consultationFee?: number
   specialty?: string
   introduction?: string
+}
+
+/** 角色 */
+export interface Role {
+  roleId: string
+  roleName: string
+  roleCode: string
+  description: string
+  status: number
 }
 
 /** 权限 */

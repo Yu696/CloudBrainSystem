@@ -1,7 +1,6 @@
 package com.cloudbrain.service.user.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.LoginRequest;
@@ -10,16 +9,12 @@ import com.cloudbrain.dto.request.ResetPasswordRequest;
 import com.cloudbrain.dto.request.UserUpdateRequest;
 import com.cloudbrain.dto.response.LoginResponse;
 import com.cloudbrain.dto.response.UserInfoVO;
-import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.Patient;
 import com.cloudbrain.entity.Role;
-import com.cloudbrain.entity.SystemUser;
 import com.cloudbrain.entity.User;
 import com.cloudbrain.entity.UserRole;
-import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.mapper.RoleMapper;
-import com.cloudbrain.mapper.SystemUserMapper;
 import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.mapper.UserRoleMapper;
 import com.cloudbrain.security.JwtUtil;
@@ -43,18 +38,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final PasswordEncoder passwordEncoder;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
-    private final DoctorMapper doctorMapper;
     private final PatientMapper patientMapper;
-    private final SystemUserMapper systemUserMapper;
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery(User.class)
-                .eq(User::getUsername, request.getUserName());
-        if (request.getUserType() != null) {
-            wrapper.eq(User::getUserType, request.getUserType());
-        }
-        User user = baseMapper.selectOne(wrapper);
+        User user = lambdaQuery().eq(User::getUsername, request.getUserName()).one();
         if (user == null) {
             throw new BusinessException("用户名或密码错误");
         }
@@ -88,10 +76,44 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Transactional
     public void updateUser(UserUpdateRequest request) {
         User current = getRawUser();
+
+        // 更新用户表
         if (request.getRealName() != null) current.setRealName(request.getRealName());
         if (request.getPhone() != null) current.setPhone(request.getPhone());
         if (request.getEmail() != null) current.setEmail(request.getEmail());
         updateById(current);
+
+        // 如果是患者，同步更新 patient 表
+        if (current.getUserType() == 2) {
+            Patient patient = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getUserId, current.getUserId()));
+            if (patient == null) {
+                // 兼容历史数据：patient 记录不存在则新建
+                patient = new Patient();
+                patient.setPatientId(UUIDUtil.generatePatientId());
+                patient.setUserId(current.getUserId());
+                patient.setMedicalRecordNo(UUIDUtil.generateMedicalRecordNo());
+                patient.setStatus(1);
+            }
+            if (request.getName() != null) patient.setName(request.getName());
+            else if (request.getRealName() != null) patient.setName(request.getRealName());
+            if (request.getPhone() != null) patient.setPhone(request.getPhone());
+            if (request.getIdCard() != null) patient.setIdCard(request.getIdCard());
+            if (request.getGender() != null) patient.setGender(request.getGender());
+            if (request.getBirthDate() != null) patient.setBirthDate(request.getBirthDate());
+            if (request.getEmergencyPhone() != null) patient.setEmergencyPhone(request.getEmergencyPhone());
+            if (request.getAddress() != null) patient.setAddress(request.getAddress());
+            if (request.getBloodType() != null) patient.setBloodType(request.getBloodType());
+            if (request.getAllergyHistory() != null) patient.setAllergyHistory(request.getAllergyHistory());
+            if (request.getGeneticDiseases() != null) patient.setGeneticDiseases(request.getGeneticDiseases());
+            if (request.getMedicalHistory() != null) patient.setMedicalHistory(request.getMedicalHistory());
+
+            if (patient.getId() == null) {
+                patientMapper.insert(patient);
+            } else {
+                patientMapper.updateById(patient);
+            }
+        }
     }
 
     @Override
@@ -111,18 +133,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         Long count = baseMapper.countByUsername(request.getUserName());
         if (count > 0) {
             throw new BusinessException("用户名已存在");
-        }
-
-        // 校验用户类型：公开注册仅允许患者，管理员创建可指定任意类型
-        if (request.getUserType() != null && request.getUserType() != 2) {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            boolean isAdmin = auth != null && auth.isAuthenticated()
-                    && auth.getPrincipal() instanceof User
-                    && ((User) auth.getPrincipal()).getUserType() != null
-                    && ((User) auth.getPrincipal()).getUserType() == 1;
-            if (!isAdmin) {
-                throw new BusinessException("仅允许注册患者账号");
-            }
         }
 
         User user = new User();
@@ -148,6 +158,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userRole.setRoleId(defaultRoleId);
         userRoleMapper.insert(userRole);
 
+        // 患者类型自动创建 patient 档案（userId 关联，未填字段给空值占位）
+        if (user.getUserType() == 2) {
+            Patient patient = new Patient();
+            patient.setPatientId(UUIDUtil.generatePatientId());
+            patient.setUserId(user.getUserId());
+            patient.setMedicalRecordNo(UUIDUtil.generateMedicalRecordNo());
+            patient.setName(user.getRealName());
+            patient.setIdCard("");
+            patient.setGender(0);
+            patient.setPhone(user.getPhone());
+            patient.setEmergencyPhone("");
+            patient.setAddress("");
+            patient.setBloodType("");
+            patient.setAllergyHistory("");
+            patient.setGeneticDiseases("");
+            patient.setMedicalHistory("");
+            patient.setQrCodeUrl("");
+            patient.setSource(1);
+            patient.setStatus(1);
+            patientMapper.insert(patient);
+        }
+
         return user.getUserId();
     }
 
@@ -164,70 +196,46 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException("无操作权限，仅管理员可执行此操作");
         }
 
-        LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery(User.class)
-                .orderByAsc(User::getCreateTime);
+        List<User> users;
         if (userType != null) {
-            wrapper.eq(User::getUserType, userType);
+            users = lambdaQuery().eq(User::getUserType, userType).orderByAsc(User::getCreateTime).list();
+        } else {
+            users = lambdaQuery().orderByAsc(User::getCreateTime).list();
         }
-        List<User> users = baseMapper.selectList(wrapper);
         return users.stream().map(this::buildUserInfo).toList();
     }
 
-    /** 启用/禁用用户（仅管理员） */
     @Override
     @Transactional
     public void updateStatus(String userId, Integer status) {
-        // 校验管理员权限
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new BusinessException("未登录");
-        }
-        User current = (User) auth.getPrincipal();
-        if (current.getUserType() == null || current.getUserType() != 1) {
-            throw new BusinessException("无操作权限，仅管理员可执行此操作");
-        }
-
-        User user = baseMapper.selectOne(
-                new LambdaQueryWrapper<User>().eq(User::getUserId, userId));
+        User user = getById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
         user.setStatus(status);
-        baseMapper.updateById(user);
+        updateById(user);
     }
 
-    /** 删除用户（仅管理员，级联清理关联表） */
     @Override
     @Transactional
     public void deleteUser(String userId) {
-        // 校验管理员权限
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new BusinessException("未登录");
-        }
-        User current = (User) auth.getPrincipal();
-        if (current.getUserType() == null || current.getUserType() != 1) {
-            throw new BusinessException("无操作权限，仅管理员可执行此操作");
-        }
-
-        User user = baseMapper.selectOne(
-                new LambdaQueryWrapper<User>().eq(User::getUserId, userId));
+        User user = getById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
 
-        // 级联删除关联表数据
-        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
-                .eq(UserRole::getUserId, userId));
-        doctorMapper.delete(new LambdaQueryWrapper<Doctor>()
-                .eq(Doctor::getUserId, userId));
-        patientMapper.delete(new LambdaQueryWrapper<Patient>()
-                .eq(Patient::getUserId, userId));
-        systemUserMapper.delete(new LambdaQueryWrapper<SystemUser>()
-                .eq(SystemUser::getUserId, userId));
+        // 删除用户角色关联
+        userRoleMapper.delete(new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
 
-        // 逻辑删除用户本身
-        baseMapper.deleteById(user.getId());
+        // 删除患者档案（如果存在）
+        Patient patient = patientMapper.selectOne(
+                new LambdaQueryWrapper<Patient>().eq(Patient::getUserId, userId));
+        if (patient != null) {
+            patientMapper.deleteById(patient.getId());
+        }
+
+        // 删除用户
+        removeById(userId);
     }
 
     /** 获取当前用户实体（含密码，仅内部使用） */
@@ -239,7 +247,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return (User) authentication.getPrincipal();
     }
 
-    /** 构建带角色信息的用户 VO（一个用户只有一个角色） */
+    /** 构建带角色信息和患者档案的用户 VO */
     private UserInfoVO buildUserInfo(User user) {
         String roleName = null;
         List<UserRole> userRoles = userRoleMapper.selectList(
@@ -250,7 +258,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             roleName = role != null ? role.getRoleName() : null;
         }
 
-        return UserInfoVO.builder()
+        UserInfoVO.UserInfoVOBuilder builder = UserInfoVO.builder()
                 .userId(user.getUserId())
                 .userName(user.getUsername())
                 .realName(user.getRealName())
@@ -260,7 +268,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .userType(user.getUserType())
                 .role(roleName)
                 .status(user.getStatus())
-                .createTime(user.getCreateTime())
-                .build();
+                .createTime(user.getCreateTime());
+
+        // 患者类型：附加档案信息
+        if (user.getUserType() != null && user.getUserType() == 2) {
+            Patient patient = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getUserId, user.getUserId()));
+            if (patient != null) {
+                builder.patientId(patient.getPatientId())
+                        .medicalRecordNo(patient.getMedicalRecordNo())
+                        .name(patient.getName())
+                        .idCard(patient.getIdCard())
+                        .gender(patient.getGender())
+                        .birthDate(patient.getBirthDate())
+                        .emergencyPhone(patient.getEmergencyPhone())
+                        .address(patient.getAddress())
+                        .bloodType(patient.getBloodType())
+                        .allergyHistory(patient.getAllergyHistory())
+                        .geneticDiseases(patient.getGeneticDiseases())
+                        .medicalHistory(patient.getMedicalHistory());
+            }
+        }
+
+        return builder.build();
     }
 }

@@ -55,7 +55,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Lock, Tools } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { registerApi } from '@/api/user'

@@ -10,6 +10,7 @@ public class DoctorVO {
     private String doctorId;
     private String userId;
     private String departmentId;
+    private String departmentName;
     private String realName;
     private String title;
     private String specialty;
