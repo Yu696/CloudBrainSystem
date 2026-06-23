@@ -4,7 +4,9 @@ import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.dto.request.DoctorUpdateRequest;
 import com.cloudbrain.dto.response.DoctorVO;
+import com.cloudbrain.dto.response.PatientInfoVO;
 import com.cloudbrain.service.appointment.DoctorService;
+import com.cloudbrain.service.patient.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import java.util.List;
 public class DoctorController extends BaseController {
 
     private final DoctorService doctorService;
+    private final PatientService patientService;
 
     @Operation(summary = "医生列表（仅可用）")
     @GetMapping("/list")
@@ -63,5 +66,15 @@ public class DoctorController extends BaseController {
     public Result<String> toggle(@RequestParam String doctorId) {
         doctorService.toggleAvailable(doctorId);
         return success("操作成功");
+    }
+
+    /** 医生查看挂过自己号的患者列表 */
+    @Operation(summary = "医生患者列表")
+    @GetMapping("/patients")
+    public Result<List<PatientInfoVO>> patients(@RequestParam(required = false) String name,
+                                                 @RequestParam(required = false) String phone,
+                                                 @RequestParam(required = false) String medicalRecordNo) {
+        DoctorVO doctor = doctorService.getCurrentDoctor();
+        return success(patientService.listPatientsByDoctor(doctor.getDoctorId(), name, phone, medicalRecordNo));
     }
 }

@@ -7,7 +7,9 @@ import com.cloudbrain.dto.request.PatientCreateRequest;
 import com.cloudbrain.dto.request.PatientUpdateRequest;
 import com.cloudbrain.dto.response.PatientCreateVO;
 import com.cloudbrain.dto.response.PatientInfoVO;
+import com.cloudbrain.entity.Appointment;
 import com.cloudbrain.entity.Patient;
+import com.cloudbrain.mapper.AppointmentMapper;
 import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.service.patient.PatientService;
 import com.cloudbrain.util.UUIDUtil;
@@ -20,6 +22,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> implements PatientService {
+
+    private final AppointmentMapper appointmentMapper;
 
     @Override
     @Transactional
@@ -122,5 +126,30 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> impl
             throw new BusinessException("未找到关联的患者档案");
         }
         return PatientInfoVO.from(patient);
+    }
+
+    @Override
+    public List<PatientInfoVO> listPatientsByDoctor(String doctorId, String name, String phone, String medicalRecordNo) {
+        // 查询该医生的所有预约记录，获取去重后的 patientId 列表
+        List<String> patientIds = appointmentMapper.selectList(
+                new LambdaQueryWrapper<Appointment>()
+                        .eq(Appointment::getDoctorId, doctorId)
+                        .select(Appointment::getPatientId)
+        ).stream().map(Appointment::getPatientId).distinct().toList();
+
+        if (patientIds.isEmpty()) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
+                .in(Patient::getPatientId, patientIds)
+                .eq(name != null && !name.isEmpty(), Patient::getName, name)
+                .eq(phone != null && !phone.isEmpty(), Patient::getPhone, phone)
+                .eq(medicalRecordNo != null && !medicalRecordNo.isEmpty(), Patient::getMedicalRecordNo, medicalRecordNo)
+                .orderByDesc(Patient::getCreateTime);
+
+        return this.list(wrapper).stream()
+                .map(PatientInfoVO::from)
+                .toList();
     }
 }
