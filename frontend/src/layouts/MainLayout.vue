@@ -84,6 +84,24 @@
               <el-icon><Key /></el-icon>
               <template #title>权限管理</template>
             </el-menu-item>
+            <el-sub-menu index="ai-config" class="nested-submenu">
+              <template #title>
+                <el-icon><MagicStick /></el-icon>
+                <span>AI 配置</span>
+              </template>
+              <el-menu-item index="/admin/ai/prompts">
+                <el-icon><Document /></el-icon>
+                <template #title>Prompt 模板</template>
+              </el-menu-item>
+              <el-menu-item index="/admin/ai/disease-kb">
+                <el-icon><Reading /></el-icon>
+                <template #title>疾病知识库</template>
+              </el-menu-item>
+              <el-menu-item index="/admin/ai/monitor">
+                <el-icon><DataAnalysis /></el-icon>
+                <template #title>AI 调用监控</template>
+              </el-menu-item>
+            </el-sub-menu>
           </el-sub-menu>
         </template>
 
@@ -118,6 +136,17 @@
               <template #title>已诊列表</template>
             </el-menu-item>
           </el-sub-menu>
+
+          <el-sub-menu index="ai-tools">
+            <template #title>
+              <el-icon><MagicStick /></el-icon>
+              <span>AI 辅助工具</span>
+            </template>
+            <el-menu-item index="/patient/list">
+              <el-icon><UserFilled /></el-icon>
+              <template #title>选择患者</template>
+            </el-menu-item>
+          </el-sub-menu>
         </template>
 
         <!-- ===== 患者菜单 ===== -->
@@ -145,6 +174,21 @@
             <el-menu-item index="/patient/records">
               <el-icon><Document /></el-icon>
               <template #title>我的病历</template>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="ai-services">
+            <template #title>
+              <el-icon><MagicStick /></el-icon>
+              <span>AI 智能服务</span>
+            </template>
+            <el-menu-item index="/ai/triage">
+              <el-icon><Search /></el-icon>
+              <template #title>智能分诊</template>
+            </el-menu-item>
+            <el-menu-item index="/ai/triage-history">
+              <el-icon><Clock /></el-icon>
+              <template #title>分诊历史</template>
             </el-menu-item>
           </el-sub-menu>
         </template>
@@ -204,7 +248,8 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Odometer, User, Setting, UserFilled, Key,
   Fold, Expand, ArrowDown, SwitchButton,
-  Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock
+  Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock,
+  MagicStick, Search, Reading, DataAnalysis
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'
@@ -287,6 +332,11 @@ function handleLogout() {
 }
 
 /* ===== 顶栏 ===== */
+/* 三级嵌套菜单缩进 */
+.layout-aside .nested-submenu .el-menu-item {
+  padding-left: 64px !important;
+}
+
 .layout-header {
   display: flex;
   align-items: center;

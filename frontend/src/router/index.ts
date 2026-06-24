@@ -204,6 +204,51 @@ const routes: RouteRecordRaw[] = [
         name: 'PatientRecords',
         component: () => import('@/views/patient/PatientRecordView.vue'),
         meta: { title: '我的病历' }
+      },
+      // M04 AI 辅助诊断 - 患者端
+      {
+        path: 'ai/triage',
+        name: 'AiTriage',
+        component: () => import('@/views/ai/TriageView.vue'),
+        meta: { title: '智能分诊' }
+      },
+      {
+        path: 'ai/triage-history',
+        name: 'AiTriageHistory',
+        component: () => import('@/views/ai/TriageHistoryView.vue'),
+        meta: { title: '分诊历史' }
+      },
+      // M04 AI 辅助诊断 - 医生端
+      {
+        path: 'ai/diagnosis/:patientId',
+        name: 'AiDiagnosis',
+        component: () => import('@/views/ai/DiagnosisView.vue'),
+        meta: { title: 'AI 辅助诊断' }
+      },
+      {
+        path: 'ai/diagnosis-report/:diagnosisId',
+        name: 'AiDiagnosisReport',
+        component: () => import('@/views/ai/DiagnosisReportView.vue'),
+        meta: { title: '诊断报告' }
+      },
+      // M04 AI 辅助诊断 - 管理端
+      {
+        path: 'admin/ai/prompts',
+        name: 'AiPromptManage',
+        component: () => import('@/views/admin/AiPromptManageView.vue'),
+        meta: { title: 'Prompt 模板', admin: true }
+      },
+      {
+        path: 'admin/ai/disease-kb',
+        name: 'DiseaseKbManage',
+        component: () => import('@/views/admin/DiseaseKbView.vue'),
+        meta: { title: '疾病知识库', admin: true }
+      },
+      {
+        path: 'admin/ai/monitor',
+        name: 'AiMonitor',
+        component: () => import('@/views/admin/AiMonitorView.vue'),
+        meta: { title: 'AI 调用监控', admin: true }
       }
     ]
   }
