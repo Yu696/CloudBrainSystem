@@ -37,6 +37,13 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             throw new BusinessException("医生不存在");
         }
 
+        // 校验时段长度：不能超过班次总时长
+        int slotDuration = request.getSlotDuration() != null ? request.getSlotDuration() : 30;
+        long totalMinutes = java.time.Duration.between(request.getStartTime(), request.getEndTime()).toMinutes();
+        if (slotDuration > totalMinutes) {
+            throw new BusinessException("时段长度不能超过班次总时长（" + totalMinutes + "分钟）");
+        }
+
         // 检查是否已有同一天同一班次的排班
         Schedule existing = this.getOne(new LambdaQueryWrapper<Schedule>()
                 .eq(Schedule::getDoctorId, request.getDoctorId())
@@ -46,7 +53,6 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             throw new BusinessException("该医生当天的该班次已有排班");
         }
 
-        int slotDuration = request.getSlotDuration() != null ? request.getSlotDuration() : 30;
         int maxPatients = request.getMaxPatients() != null ? request.getMaxPatients() : 20;
 
         Schedule schedule = new Schedule();
@@ -90,9 +96,12 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         if (schedules.isEmpty()) {
             return List.of();
         }
-        Schedule schedule = schedules.get(0);
+        // 获取当天所有排班的可用时段
+        List<String> scheduleIds = schedules.stream()
+                .map(Schedule::getScheduleId)
+                .toList();
         return timeSlotMapper.selectList(new LambdaQueryWrapper<TimeSlot>()
-                .eq(TimeSlot::getScheduleId, schedule.getScheduleId())
+                .in(TimeSlot::getScheduleId, scheduleIds)
                 .eq(TimeSlot::getStatus, 0));
     }
 
