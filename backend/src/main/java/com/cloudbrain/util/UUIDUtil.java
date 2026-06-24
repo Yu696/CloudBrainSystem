@@ -64,6 +64,28 @@ public class UUIDUtil {
         return "AUD_" + shortUuid();
     }
 
+    // ==================== M04 AI 辅助诊断 ====================
+
+    public static String generateTriageId() {
+        return "TRI_" + shortUuid();
+    }
+
+    public static String generateDiagnosisId() {
+        return "DIA_" + shortUuid();
+    }
+
+    public static String generateGenerationId() {
+        return "GEN_" + shortUuid();
+    }
+
+    public static String generateTemplateId() {
+        return "PTMP_" + shortUuid();
+    }
+
+    public static String generateDiseaseId() {
+        return "DK_" + shortUuid();
+    }
+
     private static String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
