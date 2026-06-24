@@ -7,7 +7,9 @@ import com.cloudbrain.dto.request.PatientCreateRequest;
 import com.cloudbrain.dto.request.PatientUpdateRequest;
 import com.cloudbrain.dto.response.PatientCreateVO;
 import com.cloudbrain.dto.response.PatientInfoVO;
+import com.cloudbrain.entity.Appointment;
 import com.cloudbrain.entity.Patient;
+import com.cloudbrain.mapper.AppointmentMapper;
 import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.service.patient.PatientService;
 import com.cloudbrain.util.UUIDUtil;
@@ -19,15 +21,20 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> implements PatientService {
+public class  PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> implements PatientService {
+
+    private final AppointmentMapper appointmentMapper;
 
     @Override
     @Transactional
     public PatientCreateVO createPatient(PatientCreateRequest request) {
         // 校验身份证唯一性
-        Long count = lambdaQuery().eq(Patient::getIdCard, request.getIdCard()).count();
-        if (count > 0) {
-            throw new BusinessException("身份证号已存在");
+        if (lambdaQuery().eq(Patient::getIdCard, request.getIdCard()).count() > 0) {
+            throw new BusinessException("该身份证号已存在，请检查后重试");
+        }
+        // 校验手机号唯一性
+        if (lambdaQuery().eq(Patient::getPhone, request.getPhone()).count() > 0) {
+            throw new BusinessException("该手机号已被其他用户绑定，请更换手机号");
         }
 
         Patient patient = new Patient();
@@ -83,10 +90,17 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> impl
             throw new BusinessException("患者不存在");
         }
 
+        // 校验唯一字段是否与其他患者冲突
+        if (request.getPhone() != null && !request.getPhone().equals(patient.getPhone())) {
+            if (lambdaQuery().eq(Patient::getPhone, request.getPhone()).count() > 0) {
+                throw new BusinessException("该手机号已被其他用户绑定，请更换手机号");
+            }
+            patient.setPhone(request.getPhone());
+        }
+
         if (request.getName() != null) patient.setName(request.getName());
         if (request.getGender() != null) patient.setGender(request.getGender());
         if (request.getBirthDate() != null) patient.setBirthDate(request.getBirthDate());
-        if (request.getPhone() != null) patient.setPhone(request.getPhone());
         if (request.getEmergencyPhone() != null) patient.setEmergencyPhone(request.getEmergencyPhone());
         if (request.getAddress() != null) patient.setAddress(request.getAddress());
         if (request.getBloodType() != null) patient.setBloodType(request.getBloodType());
@@ -112,5 +126,30 @@ public class PatientServiceImpl extends ServiceImpl<PatientMapper, Patient> impl
             throw new BusinessException("未找到关联的患者档案");
         }
         return PatientInfoVO.from(patient);
+    }
+
+    @Override
+    public List<PatientInfoVO> listPatientsByDoctor(String doctorId, String name, String phone, String medicalRecordNo) {
+        // 查询该医生的所有预约记录，获取去重后的 patientId 列表
+        List<String> patientIds = appointmentMapper.selectList(
+                new LambdaQueryWrapper<Appointment>()
+                        .eq(Appointment::getDoctorId, doctorId)
+                        .select(Appointment::getPatientId)
+        ).stream().map(Appointment::getPatientId).distinct().toList();
+
+        if (patientIds.isEmpty()) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<Patient> wrapper = new LambdaQueryWrapper<Patient>()
+                .in(Patient::getPatientId, patientIds)
+                .eq(name != null && !name.isEmpty(), Patient::getName, name)
+                .eq(phone != null && !phone.isEmpty(), Patient::getPhone, phone)
+                .eq(medicalRecordNo != null && !medicalRecordNo.isEmpty(), Patient::getMedicalRecordNo, medicalRecordNo)
+                .orderByDesc(Patient::getCreateTime);
+
+        return this.list(wrapper).stream()
+                .map(PatientInfoVO::from)
+                .toList();
     }
 }

@@ -78,9 +78,11 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, Refresh, Plus } from '@element-plus/icons-vue'
-import { listPatientsApi } from '@/api/patient'
+import { listPatientsApi, adminListPatientsApi, doctorListPatientsApi } from '@/api/patient'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 
 const patients = ref<any[]>([])
 const loading = ref(false)
@@ -102,7 +104,15 @@ async function loadPatients() {
     if (searchForm.name) params.name = searchForm.name
     if (searchForm.phone) params.phone = searchForm.phone
     if (searchForm.medicalRecordNo) params.medicalRecordNo = searchForm.medicalRecordNo
-    const res = await listPatientsApi(params)
+
+    let res
+    if (userStore.isAdmin) {
+      res = await adminListPatientsApi(params)
+    } else if (userStore.isDoctor) {
+      res = await doctorListPatientsApi(params)
+    } else {
+      res = await listPatientsApi(params)
+    }
     patients.value = (res.data as any[]) || []
   } catch {
     patients.value = []

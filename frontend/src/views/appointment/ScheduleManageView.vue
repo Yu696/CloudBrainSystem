@@ -101,7 +101,7 @@
                 <el-option
                   v-for="doc in allDoctors"
                   :key="doc.doctorId"
-                  :label="(doc.title || '医师') + ' - ' + doc.doctorId"
+                  :label="(doc.title || '医师') + ' - ' + (doc.realName || doc.doctorId)"
                   :value="doc.doctorId"
                 />
               </el-select>

@@ -8,6 +8,8 @@ export interface UserInfoVO {
   avatarUrl: string
   userType: number
   role: string | null
+  status: number
+  createTime: string
   // 患者档案字段（仅 userType=2 时有值）
   patientId?: string
   medicalRecordNo?: string
@@ -27,6 +29,20 @@ export interface UserInfoVO {
 export interface LoginResponse {
   token: string
   userInfo: UserInfoVO
+}
+
+/** 用户角色 VO（含医生扩展信息） */
+export interface UserRoleVO {
+  roleId: string
+  roleName: string
+  roleCode: string
+  description: string
+  status: number
+  departmentId?: string
+  title?: string
+  consultationFee?: number
+  specialty?: string
+  introduction?: string
 }
 
 /** 角色 */

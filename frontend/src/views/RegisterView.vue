@@ -38,18 +38,6 @@
           <el-input v-model="form.phone" placeholder="手机号" maxlength="11" class="register-input">
           </el-input>
         </el-form-item>
-        <el-form-item prop="userType">
-          <el-select v-model="form.userType" placeholder="选择你的角色" class="register-input">
-            <el-option label="患者" :value="2">
-              <el-icon><User /></el-icon>
-              <span style="margin-left: 8px">患者</span>
-            </el-option>
-            <el-option label="医生" :value="3">
-              <el-icon><Tools /></el-icon>
-              <span style="margin-left: 8px">医生</span>
-            </el-option>
-          </el-select>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" class="register-btn" @click="handleRegister" round>
             注 册
@@ -67,7 +55,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Lock, Tools } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { registerApi } from '@/api/user'
@@ -83,7 +71,7 @@ const form = reactive({
   confirmPassword: '',
   realName: '',
   phone: '',
-  userType: 2
+  userType: 2   // 仅允许注册患者
 })
 
 const validatePass = (_rule: any, value: string, callback: any) => {

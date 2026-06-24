@@ -5,6 +5,7 @@ import com.cloudbrain.common.Result;
 import com.cloudbrain.dto.request.LoginRequest;
 import com.cloudbrain.dto.request.RegisterRequest;
 import com.cloudbrain.dto.request.ResetPasswordRequest;
+import com.cloudbrain.dto.request.UserStatusRequest;
 import com.cloudbrain.dto.request.UserUpdateRequest;
 import com.cloudbrain.dto.response.LoginResponse;
 import com.cloudbrain.dto.response.UserInfoVO;
@@ -56,11 +57,27 @@ public class UserController extends BaseController {
         return success("重置成功");
     }
 
-    /** 获取所有用户列表（含角色信息，仅管理员） */
+    /** 获取所有用户列表（含角色信息，仅管理员），可按用户类型筛选 */
     @Operation(summary = "用户列表")
     @GetMapping("/list-all")
-    public Result<List<UserInfoVO>> listAll() {
-        return success(userService.listAllUsers());
+    public Result<List<UserInfoVO>> listAll(@RequestParam(required = false) Integer userType) {
+        return success(userService.listAllUsers(userType));
+    }
+
+    /** 启用/禁用用户（仅管理员） */
+    @Operation(summary = "启用/禁用用户")
+    @PutMapping("/status")
+    public Result<String> status(@Valid @RequestBody UserStatusRequest request) {
+        userService.updateStatus(request.getUserId(), request.getStatus());
+        return success(request.getStatus() == 1 ? "启用成功" : "禁用成功");
+    }
+
+    /** 删除用户（仅管理员） */
+    @Operation(summary = "删除用户")
+    @DeleteMapping("/delete")
+    public Result<String> delete(@RequestParam String userId) {
+        userService.deleteUser(userId);
+        return success("删除成功");
     }
 
     /** 用户注册，返回用户 ID */

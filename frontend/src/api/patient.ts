@@ -20,9 +20,19 @@ export function getPatientInfoApi(patientId: string) {
   return request.get<any>('/patient/info', { params: { patientId } })
 }
 
-/** 患者列表 */
+/** 患者列表（旧接口） */
 export function listPatientsApi(params?: { name?: string; phone?: string; medicalRecordNo?: string }) {
   return request.get<any[]>('/patient/list', { params })
+}
+
+/** 管理员端患者列表 */
+export function adminListPatientsApi(params?: { name?: string; phone?: string; medicalRecordNo?: string }) {
+  return request.get<any[]>('/admin/patients', { params })
+}
+
+/** 医生端患者列表（仅挂过该医生号的患者） */
+export function doctorListPatientsApi(params?: { name?: string; phone?: string; medicalRecordNo?: string }) {
+  return request.get<any[]>('/doctor/patients', { params })
 }
 
 /** 更新患者档案 */

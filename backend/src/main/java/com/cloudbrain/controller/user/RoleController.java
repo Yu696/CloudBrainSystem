@@ -4,6 +4,7 @@ import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.dto.request.PermissionUpdateRequest;
 import com.cloudbrain.dto.request.RoleAssignRequest;
+import com.cloudbrain.dto.response.UserRoleVO;
 import com.cloudbrain.entity.Permission;
 import com.cloudbrain.entity.Role;
 import com.cloudbrain.service.user.RoleService;
@@ -48,8 +49,15 @@ public class RoleController extends BaseController {
     /** 查询指定用户的角色信息 */
     @Operation(summary = "查询用户角色")
     @GetMapping("/user-role")
-    public Result<Role> userRole(@RequestParam String userId) {
+    public Result<UserRoleVO> userRole(@RequestParam String userId) {
         return success(roleService.getUserRole(userId));
+    }
+
+    /** 获取完整的权限树列表 */
+    @Operation(summary = "权限树")
+    @GetMapping("/permission-tree")
+    public Result<List<Permission>> permissionTree() {
+        return success(roleService.listAllPermissions());
     }
 
     /** 更新角色权限配置，先清空原权限再批量插入新权限 */

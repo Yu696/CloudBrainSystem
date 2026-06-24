@@ -44,14 +44,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import { listAppointmentsApi, getMyDoctorInfoApi } from '@/api/appointment'
 import { getPatientInfoApi } from '@/api/patient'
-import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
-const userStore = useUserStore()
 
 const appointments = ref<any[]>([])
 const loading = ref(false)

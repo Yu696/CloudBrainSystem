@@ -15,8 +15,8 @@ export const useUserStore = defineStore('user', () => {
   const isPatient = computed(() => userInfo.value?.userType === 2)
 
   /** 登录，保存 token 和用户信息，患者同步 patientId */
-  async function login(userName: string, password: string) {
-    const res = await loginApi({ userName, password })
+  async function login(userName: string, password: string, userType?: number) {
+    const res = await loginApi({ userName, password, userType })
     const data = res.data as LoginResponse
     token.value = data.token
     userInfo.value = data.userInfo

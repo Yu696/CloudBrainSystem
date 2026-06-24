@@ -26,4 +26,7 @@ public interface PatientService {
 
     /** 根据 userId 查找患者 */
     PatientInfoVO findByUserId(String userId);
+
+    /** 医生端：只返回挂过该医生号的患者 */
+    List<PatientInfoVO> listPatientsByDoctor(String doctorId, String name, String phone, String medicalRecordNo);
 }
