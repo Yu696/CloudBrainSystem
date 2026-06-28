@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
-    <file url="file://$PROJECT_DIR$/sql/init/11-ai-data.sql" value="d8f7566d-fd6a-4df3-8e0f-047b232b5f08" />
-    <file url="file://$PROJECT_DIR$/sql/seed/ai_call_log.sql" value="d8f7566d-fd6a-4df3-8e0f-047b232b5f08" />
-    <file url="file://$PROJECT_DIR$/sql/seed/disease_knowledge_seed.sql" value="d8f7566d-fd6a-4df3-8e0f-047b232b5f08" />
-    <file url="file://$PROJECT_DIR$/sql/seed/extend_departments.sql" value="d8f7566d-fd6a-4df3-8e0f-047b232b5f08" />
+    <file url="file://$PROJECT_DIR$/sql/init/11-ai-data.sql" value="0fa0437d-03d9-4d36-a4ce-1007436dcec7" />
+    <file url="file://$PROJECT_DIR$/sql/seed/ai_call_log.sql" value="0fa0437d-03d9-4d36-a4ce-1007436dcec7" />
+    <file url="file://$PROJECT_DIR$/sql/seed/disease_knowledge_seed.sql" value="0fa0437d-03d9-4d36-a4ce-1007436dcec7" />
+    <file url="file://$PROJECT_DIR$/sql/seed/extend_departments.sql" value="0fa0437d-03d9-4d36-a4ce-1007436dcec7" />
   </component>
 </project>
