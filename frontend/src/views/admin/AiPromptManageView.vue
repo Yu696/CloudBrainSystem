@@ -54,14 +54,14 @@
           <el-input v-model="form.templateName" placeholder="输入模板名称" maxlength="100" />
         </el-form-item>
         <el-form-item label="模板类型" prop="templateType">
-          <el-select v-model="form.templateType" placeholder="选择类型" style="width:100%">
+          <el-select v-model="form.templateType" placeholder="选择类型" style="width:100%" @change="onTypeChange">
             <el-option label="分诊模板" :value="0" />
             <el-option label="病历生成模板" :value="1" />
             <el-option label="处方审核模板" :value="2" />
           </el-select>
         </el-form-item>
         <el-form-item label="模板内容" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="8" placeholder="使用 {{变量名}} 作为占位符" maxlength="5000" show-word-limit />
+          <el-input ref="contentInputRef" v-model="form.content" type="textarea" :rows="8" placeholder="使用 {{变量名}} 作为占位符" maxlength="5000" show-word-limit @blur="onContentBlur" @mouseup="onContentCursorChange" @keyup="onContentCursorChange" />
         </el-form-item>
         <el-form-item label="变量">
           <el-select v-model="form.variables" multiple filterable allow-create default-first-option placeholder="输入变量名后回车" style="width:100%">
@@ -79,13 +79,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { listPromptTemplatesApi, createPromptTemplateApi, updatePromptTemplateApi, deletePromptTemplateApi, togglePromptTemplateStatusApi } from '@/api/ai'
 import type { FormInstance } from 'element-plus'
 
 const formRef = ref<FormInstance>()
+const contentInputRef = ref<any>(null)  // 模板内容文本框引用，用于获取光标位置
+const savedCursorPos = ref(-1)          // 保存文本框失焦前时光标位置，-1 表示末尾
 const loading = ref(false)
 const saving = ref(false)
 const templates = ref<any[]>([])
@@ -94,7 +96,39 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const editId = ref('')
 
-const presetVars = ['chief_complaint', 'age', 'gender', 'dialogue', 'patient_info', 'prescription_items']
+const presetVars = ['chief_complaint', 'age', 'gender', 'allergy_history', 'medical_history', 'current_medications', 'dialogue', 'patient_info', 'prescription_items', 'physical_exam', 'auxiliary_exam', 'present_illness']
+
+/** 按模板类型获取预设 JSON Schema */
+function getDefaultContentForType(type: number): string {
+  switch (type) {
+    case 0: // 分诊
+      return '你是一位资深全科医生。请根据以下患者主诉进行智能分诊分析。\n请严格以 JSON 格式返回结果。\n\n' +
+        '患者主诉：{{chief_complaint}}\n' +
+        '年龄：{{age}}，性别：{{gender}}\n' +
+        '过敏史：{{allergy_history}}\n既往病史：{{medical_history}}\n当前用药：{{current_medications}}\n\n' +
+        '请返回 JSON：\n' +
+        '{\n  "recommendedDepartment": {"departmentName": "", "confidence": 0.0},\n  ' +
+        '"alternativeDepartments": [{"departmentName": "", "confidence": 0.0}],\n  ' +
+        '"diseaseMatches": [{"diseaseName": "", "icdCode": "", "confidence": 0.0, "matchedSymptoms": []}],\n  ' +
+        '"confidenceScore": 0.0,\n  "analysisDetail": ""\n}'
+    case 1: // 病历生成
+      return '你是一位医疗文书专家。请将以下医患对话转换为结构化病历。\n请严格以 JSON 格式返回结果。\n\n' +
+        '对话内容：{{dialogue}}\n患者信息：{{patient_info}}\n\n' +
+        '请返回 JSON：\n' +
+        '{\n  "recordPreview": {\n    "chiefComplaint": "",\n    "presentIllness": "",\n    ' +
+        '"pastHistory": "",\n    "physicalExam": "",\n    "preliminaryDiagnosis": "",\n    ' +
+        '"treatmentPlan": ""\n  }\n}'
+    case 2: // 处方审核
+      return '你是一位临床药学专家。请审核以下处方。\n请严格以 JSON 格式返回结果。\n\n' +
+        '患者信息：{{patient_info}}\n处方药品：{{prescription_items}}\n\n' +
+        '请返回 JSON：\n' +
+        '{\n  "overallResult": "PASS",\n  ' +
+        '"items": [{"drugName": "", "result": "PASS", "checks": [' +
+        '{"checkType": "", "result": "PASS", "detail": ""}]}],\n  ' +
+        '"summary": "",\n  "confidenceScore": 0.0\n}'
+    default: return ''
+  }
+}
 
 const form = reactive({
   templateName: '',
@@ -111,6 +145,39 @@ const rules = {
 
 onMounted(() => { loadTemplates() })
 
+const textareaEl = () => contentInputRef.value?.$el?.querySelector('textarea') as HTMLTextAreaElement | null
+
+/** 鼠标/键盘操作时记录光标位置 */
+function onContentCursorChange() {
+  const el = textareaEl()
+  if (el) savedCursorPos.value = el.selectionStart
+}
+
+/** 文本框失焦时记录光标位置（点击变量框前最后一刻） */
+function onContentBlur() {
+  const el = textareaEl()
+  if (el) savedCursorPos.value = el.selectionStart
+}
+
+// 变量列表变化：新增自动在光标处插入 {{变量}}，删除自动移除 {{变量}}
+watch(() => [...form.variables], (newVars, oldVars) => {
+  const old = oldVars || []
+  // 新增的变量 → 在光标位置插入
+  const added = newVars.filter((v: string) => !old.includes(v))
+  for (const v of added) {
+    const placeholder = `{{${v}}}`
+    if (!form.content.includes(placeholder)) {
+      const pos = savedCursorPos.value >= 0 ? savedCursorPos.value : form.content.length
+      form.content = form.content.slice(0, pos) + ` {{${v}}}` + form.content.slice(pos)
+    }
+  }
+  // 删除的变量 → 移除
+  const removed = old.filter((v: string) => !newVars.includes(v))
+  for (const v of removed) {
+    form.content = form.content.replace(new RegExp(`\\s*\\{\\{${v}\\}\\}`, 'g'), '')
+  }
+})
+
 async function loadTemplates() {
   loading.value = true
   try {
@@ -125,9 +192,20 @@ function openCreate() {
   editId.value = ''
   form.templateName = ''
   form.templateType = 0
-  form.content = ''
+  form.content = getDefaultContentForType(0)
   form.variables = []
   dialogVisible.value = true
+}
+
+/** 切换模板类型时自动刷新预设内容（仅在新建且用户未修改过内容时） */
+function onTypeChange(type: number) {
+  if (!isEdit.value) {
+    // 如果当前内容是其他类型的预设，自动替换为新类型的预设
+    const allDefaults = [0, 1, 2].map(t => getDefaultContentForType(t))
+    if (!form.content || allDefaults.includes(form.content)) {
+      form.content = getDefaultContentForType(type)
+    }
+  }
 }
 
 function openEdit(row: any) {

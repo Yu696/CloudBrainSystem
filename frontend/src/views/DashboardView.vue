@@ -33,10 +33,54 @@
       </el-col>
     </el-row>
 
-    <!-- 快捷操作 + 信息 -->
-    <el-row :gutter="20">
+    <!-- AI 智能服务（患者端）/ 平台简介（管理员/医生端） + 快捷导航 -->
+    <el-row :gutter="20" class="ai-nav-row">
       <el-col :span="16">
-        <div class="cb-card">
+        <!-- 患者端：AI 智能服务卡片 -->
+        <div v-if="userStore.isPatient" class="ai-card">
+          <div class="ai-card-bg">
+            <div class="ai-glow"></div>
+            <div class="ai-particles">
+              <span class="particle p1"></span>
+              <span class="particle p2"></span>
+              <span class="particle p3"></span>
+              <span class="particle p4"></span>
+            </div>
+          </div>
+          <div class="ai-card-header">
+            <div class="ai-badge">
+              <el-icon :size="18"><MagicStick /></el-icon>
+              <span>AI</span>
+            </div>
+            <h3 class="ai-title">AI 智能服务</h3>
+            <p class="ai-subtitle">基于深度求索大模型，为您提供智能分诊辅助</p>
+          </div>
+          <div class="ai-services">
+            <div class="ai-service-item" @click="router.push('/ai/triage')">
+              <div class="ai-service-icon triage-icon">
+                <el-icon :size="28"><Search /></el-icon>
+              </div>
+              <div class="ai-service-info">
+                <div class="ai-service-name">智能分诊</div>
+                <div class="ai-service-desc">输入症状，AI 分析并推荐科室和医生</div>
+              </div>
+              <el-icon class="ai-arrow" :size="18"><ArrowRight /></el-icon>
+            </div>
+            <div class="ai-service-item" @click="router.push('/ai/triage-history')">
+              <div class="ai-service-icon history-icon">
+                <el-icon :size="28"><Clock /></el-icon>
+              </div>
+              <div class="ai-service-info">
+                <div class="ai-service-name">分诊历史</div>
+                <div class="ai-service-desc">查看过往的智能分诊记录和结果</div>
+              </div>
+              <el-icon class="ai-arrow" :size="18"><ArrowRight /></el-icon>
+            </div>
+          </div>
+        </div>
+
+        <!-- 管理员/医生端：平台简介 -->
+        <div v-else class="cb-card platform-card">
           <div class="cb-card-header">
             <span>平台简介</span>
           </div>
@@ -68,7 +112,7 @@
         </div>
       </el-col>
       <el-col :span="8">
-        <div class="cb-card">
+        <div class="cb-card nav-card">
           <div class="cb-card-header">
             <span>快捷导航</span>
           </div>
@@ -141,7 +185,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit, CircleCheck, CreditCard } from '@element-plus/icons-vue'
+import { User, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit, CircleCheck, CreditCard, MagicStick, Search, Clock, ArrowRight } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStatsApi } from '@/api/appointment'
 
@@ -288,7 +332,188 @@ onMounted(async () => {
   margin-top: 4px;
 }
 
+/* ===== AI 智能服务卡片 ===== */
+.ai-nav-row {
+  align-items: stretch;
+}
+
+.ai-nav-row .el-col {
+  display: flex;
+}
+
+.ai-nav-row .el-col > div {
+  flex: 1;
+}
+
+.ai-card {
+  position: relative;
+  border-radius: var(--cb-radius-lg);
+  overflow: hidden;
+  background: linear-gradient(135deg, #f8f6ff 0%, #f0edff 30%, #e8f0fe 100%);
+  color: var(--cb-text-primary);
+  padding: 32px 36px;
+  border: 1px solid rgba(139, 92, 246, 0.12);
+  box-shadow: 0 4px 24px rgba(139, 92, 246, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-card-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ai-glow {
+  position: absolute;
+  top: -80px;
+  right: -60px;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: ai-glow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes ai-glow-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.25);
+}
+.p1 { width: 6px; height: 6px; top: 18%; right: 15%; animation: float-up 4s ease-in-out infinite; }
+.p2 { width: 3px; height: 3px; top: 35%; left: 10%; animation: float-up 3.5s ease-in-out 0.6s infinite; }
+.p3 { width: 5px; height: 5px; top: 50%; right: 25%; animation: float-up 5s ease-in-out 1.2s infinite; }
+.p4 { width: 4px; height: 4px; bottom: 25%; left: 20%; animation: float-up 4.5s ease-in-out 0.3s infinite; }
+
+@keyframes float-up {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+  50% { transform: translateY(-14px) scale(1.5); opacity: 0.8; }
+}
+
+.ai-card-header {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 24px;
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+}
+
+.ai-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #1e1b4b;
+  letter-spacing: 0.5px;
+}
+
+.ai-subtitle {
+  font-size: var(--cb-font-sm);
+  color: #6b7280;
+  margin: 0;
+}
+
+.ai-services {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.ai-service-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  border-radius: var(--cb-radius-md);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.ai-service-item:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.12);
+  transform: translateX(4px);
+}
+
+.ai-service-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.triage-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.06));
+  color: #3b82f6;
+}
+
+.history-icon {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.06));
+  color: #8b5cf6;
+}
+
+.ai-service-info {
+  flex: 1;
+}
+
+.ai-service-name {
+  font-size: var(--cb-font-base);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.ai-service-desc {
+  font-size: var(--cb-font-xs);
+  color: #9ca3af;
+}
+
+.ai-arrow {
+  opacity: 0.25;
+  color: #8b5cf6;
+  transition: opacity 0.25s;
+}
+
+.ai-service-item:hover .ai-arrow {
+  opacity: 1;
+}
+
 /* 平台信息 */
+.platform-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.platform-card .cb-card-body {
+  flex: 1;
+}
+
 .platform-info p {
   color: var(--cb-text-secondary);
   line-height: 1.8;
@@ -319,6 +544,17 @@ onMounted(async () => {
 }
 
 /* 快捷导航 */
+.nav-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-card .cb-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .quick-links {
   display: flex;
   flex-direction: column;
