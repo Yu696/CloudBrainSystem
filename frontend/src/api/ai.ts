@@ -124,6 +124,7 @@ export function createDiseaseKbApi(data: {
   category: string
   relatedDepartmentId?: string
   symptoms: string[]
+  riskFactors?: string
   diagnosisBasis: string
   treatmentPlan: string
 }) {
