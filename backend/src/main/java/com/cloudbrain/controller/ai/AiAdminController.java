@@ -5,9 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.entity.*;
-import com.cloudbrain.mapper.DiagnosisResultMapper;
-import com.cloudbrain.mapper.GenerationLogMapper;
-import com.cloudbrain.mapper.TriageLogMapper;
+import com.cloudbrain.mapper.AiCallLogMapper;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,9 +35,7 @@ public class AiAdminController extends BaseController {
 
     private final PromptTemplateService promptTemplateService;
     private final DiseaseKbService diseaseKbService;
-    private final TriageLogMapper triageLogMapper;
-    private final DiagnosisResultMapper diagnosisResultMapper;
-    private final GenerationLogMapper generationLogMapper;
+    private final AiCallLogMapper aiCallLogMapper;
 
     // ==================== Prompt 模板管理（5 个 API） ====================
 
@@ -124,16 +120,8 @@ public class AiAdminController extends BaseController {
         LocalDateTime start = startDate != null ? LocalDate.parse(startDate).atStartOfDay() : null;
         LocalDateTime end = endDate != null ? LocalDate.parse(endDate).atTime(LocalTime.MAX) : null;
 
-        long triageTotal = countTriage(start, end);
-        long diagnosisTotal = countDiagnosis(start, end);
-        long generationTotal = countGeneration(start, end);
-
-        long triageSuccess = countTriageSuccess(start, end);
-        long diagnosisSuccess = countDiagnosisSuccess(start, end);
-        long generationSuccess = countGenerationSuccess(start, end);
-
-        long totalCalls = triageTotal + diagnosisTotal + generationTotal;
-        long successCalls = triageSuccess + diagnosisSuccess + generationSuccess;
+        long totalCalls = countByType(null, start, end);
+        long successCalls = countSuccess(null, start, end);
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("totalCalls", totalCalls);
@@ -143,10 +131,12 @@ public class AiAdminController extends BaseController {
                 ? Math.round(successCalls * 10000.0 / totalCalls) / 100.0 : 0);
 
         Map<String, Object> byType = new LinkedHashMap<>();
-        byType.put("triage", Map.of("total", triageTotal, "success", triageSuccess));
-        byType.put("diagnosis", Map.of("total", diagnosisTotal, "success", diagnosisSuccess));
-        byType.put("generation", Map.of("total", generationTotal, "success", generationSuccess));
+        byType.put("triage", buildTypeStats(0, start, end));
+        byType.put("diagnosis", buildTypeStats(1, start, end));
+        byType.put("prescriptionCheck", buildTypeStats(2, start, end));
         stats.put("byType", byType);
+
+        stats.put("dailyTrend", List.of());
 
         return success(stats);
     }
@@ -154,7 +144,7 @@ public class AiAdminController extends BaseController {
     @Operation(summary = "AI 调用明细列表")
     @GetMapping("/monitor/logs")
     public Result<Map<String, Object>> getMonitorLogs(
-            @Parameter(description = "日志类型：0=分诊 1=诊断 2=处方审核 3=病历生成") @RequestParam(required = false) Integer type,
+            @Parameter(description = "日志类型：0=分诊 1=诊断 2=处方审核") @RequestParam(required = false) Integer type,
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") int pageSize,
             @Parameter(description = "开始日期（yyyy-MM-dd）") @RequestParam(required = false) String startDate,
@@ -163,100 +153,48 @@ public class AiAdminController extends BaseController {
         LocalDateTime start = startDate != null ? LocalDate.parse(startDate).atStartOfDay() : null;
         LocalDateTime end = endDate != null ? LocalDate.parse(endDate).atTime(LocalTime.MAX) : null;
 
+        Page<AiCallLog> mpPage = new Page<>(page, pageSize);
+        LambdaQueryWrapper<AiCallLog> w = new LambdaQueryWrapper<>();
+        if (type != null) w.eq(AiCallLog::getCallType, type);
+        if (start != null) w.ge(AiCallLog::getCreateTime, start);
+        if (end != null) w.le(AiCallLog::getCreateTime, end);
+        w.orderByDesc(AiCallLog::getCreateTime);
+
+        Page<AiCallLog> pageResult = aiCallLogMapper.selectPage(mpPage, w);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("page", page);
         result.put("pageSize", pageSize);
-
-        if (type == null) {
-            result.put("total", 0);
-            result.put("records", List.of());
-            return success(result);
-        }
-
-        switch (type) {
-            case 0 -> {
-                Page<TriageLog> mpPage = new Page<>(page, pageSize);
-                LambdaQueryWrapper<TriageLog> w = new LambdaQueryWrapper<>();
-                if (start != null) w.ge(TriageLog::getCreateTime, start);
-                if (end != null) w.le(TriageLog::getCreateTime, end);
-                w.orderByDesc(TriageLog::getCreateTime);
-                Page<TriageLog> pageResult = triageLogMapper.selectPage(mpPage, w);
-                result.put("total", pageResult.getTotal());
-                result.put("records", pageResult.getRecords());
-            }
-            case 1 -> {
-                Page<DiagnosisResult> mpPage = new Page<>(page, pageSize);
-                LambdaQueryWrapper<DiagnosisResult> w = new LambdaQueryWrapper<>();
-                if (start != null) w.ge(DiagnosisResult::getCreateTime, start);
-                if (end != null) w.le(DiagnosisResult::getCreateTime, end);
-                w.orderByDesc(DiagnosisResult::getCreateTime);
-                Page<DiagnosisResult> pageResult = diagnosisResultMapper.selectPage(mpPage, w);
-                result.put("total", pageResult.getTotal());
-                result.put("records", pageResult.getRecords());
-            }
-            case 2, 3 -> {
-                Page<GenerationLog> mpPage = new Page<>(page, pageSize);
-                LambdaQueryWrapper<GenerationLog> w = new LambdaQueryWrapper<>();
-                if (start != null) w.ge(GenerationLog::getCreateTime, start);
-                if (end != null) w.le(GenerationLog::getCreateTime, end);
-                w.orderByDesc(GenerationLog::getCreateTime);
-                Page<GenerationLog> pageResult = generationLogMapper.selectPage(mpPage, w);
-                result.put("total", pageResult.getTotal());
-                result.put("records", pageResult.getRecords());
-            }
-            default -> {
-                result.put("total", 0);
-                result.put("records", List.of());
-            }
-        }
+        result.put("total", pageResult.getTotal());
+        result.put("records", pageResult.getRecords());
 
         return success(result);
     }
 
     // ==================== 监控辅助方法 ====================
 
-    private long countTriage(LocalDateTime start, LocalDateTime end) {
-        LambdaQueryWrapper<TriageLog> w = new LambdaQueryWrapper<>();
-        if (start != null) w.ge(TriageLog::getCreateTime, start);
-        if (end != null) w.le(TriageLog::getCreateTime, end);
-        return triageLogMapper.selectCount(w);
+    private long countByType(Integer callType, LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<AiCallLog> w = new LambdaQueryWrapper<>();
+        if (callType != null) w.eq(AiCallLog::getCallType, callType);
+        if (start != null) w.ge(AiCallLog::getCreateTime, start);
+        if (end != null) w.le(AiCallLog::getCreateTime, end);
+        return aiCallLogMapper.selectCount(w);
     }
 
-    private long countDiagnosis(LocalDateTime start, LocalDateTime end) {
-        LambdaQueryWrapper<DiagnosisResult> w = new LambdaQueryWrapper<>();
-        if (start != null) w.ge(DiagnosisResult::getCreateTime, start);
-        if (end != null) w.le(DiagnosisResult::getCreateTime, end);
-        return diagnosisResultMapper.selectCount(w);
+    private long countSuccess(Integer callType, LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<AiCallLog> w = new LambdaQueryWrapper<>();
+        w.eq(AiCallLog::getStatus, 1);
+        if (callType != null) w.eq(AiCallLog::getCallType, callType);
+        if (start != null) w.ge(AiCallLog::getCreateTime, start);
+        if (end != null) w.le(AiCallLog::getCreateTime, end);
+        return aiCallLogMapper.selectCount(w);
     }
 
-    private long countGeneration(LocalDateTime start, LocalDateTime end) {
-        LambdaQueryWrapper<GenerationLog> w = new LambdaQueryWrapper<>();
-        if (start != null) w.ge(GenerationLog::getCreateTime, start);
-        if (end != null) w.le(GenerationLog::getCreateTime, end);
-        return generationLogMapper.selectCount(w);
-    }
-
-    private long countTriageSuccess(LocalDateTime start, LocalDateTime end) {
-        LambdaQueryWrapper<TriageLog> w = new LambdaQueryWrapper<>();
-        w.eq(TriageLog::getStatus, 1);
-        if (start != null) w.ge(TriageLog::getCreateTime, start);
-        if (end != null) w.le(TriageLog::getCreateTime, end);
-        return triageLogMapper.selectCount(w);
-    }
-
-    private long countDiagnosisSuccess(LocalDateTime start, LocalDateTime end) {
-        LambdaQueryWrapper<DiagnosisResult> w = new LambdaQueryWrapper<>();
-        w.eq(DiagnosisResult::getStatus, 1);
-        if (start != null) w.ge(DiagnosisResult::getCreateTime, start);
-        if (end != null) w.le(DiagnosisResult::getCreateTime, end);
-        return diagnosisResultMapper.selectCount(w);
-    }
-
-    private long countGenerationSuccess(LocalDateTime start, LocalDateTime end) {
-        LambdaQueryWrapper<GenerationLog> w = new LambdaQueryWrapper<>();
-        w.eq(GenerationLog::getStatus, 1);
-        if (start != null) w.ge(GenerationLog::getCreateTime, start);
-        if (end != null) w.le(GenerationLog::getCreateTime, end);
-        return generationLogMapper.selectCount(w);
+    private Map<String, Object> buildTypeStats(Integer callType, LocalDateTime start, LocalDateTime end) {
+        long total = countByType(callType, start, end);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("calls", total);
+        m.put("avgMs", 0); // 简化：不计算平均耗时
+        return m;
     }
 }

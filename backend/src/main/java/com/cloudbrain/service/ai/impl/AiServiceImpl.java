@@ -56,12 +56,11 @@ public class AiServiceImpl implements AiService {
     private final RestTemplate aiRestTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
-
-    private final TriageLogMapper triageLogMapper;
-    private final DiagnosisResultMapper diagnosisResultMapper;
-    private final GenerationLogMapper generationLogMapper;
     private final DoctorMapper doctorMapper;
     private final DepartmentMapper departmentMapper;
+    private final AiCallLogMapper aiCallLogMapper;
+    private final TriageLogMapper triageLogMapper;
+    private final PrescriptionAuditLogMapper prescriptionAuditLogMapper;
     private final UserMapper userMapper;
 
     // ==================== AI-01/02/03 智能分诊 ====================
@@ -97,7 +96,14 @@ public class AiServiceImpl implements AiService {
 
             vo.setResponseTimeMs((int) (System.currentTimeMillis() - startTime));
 
-            // 记录日志
+            // 统一日志（监控用）
+            saveAiCallLog(vo.getTriageId(), 0, request.getPatientId(), null,
+                    truncate(request.getChiefComplaint(), 255),
+                    request.getChiefComplaint(), vo.getAnalysisDetail(),
+                    vo.getConfidenceScore(), vo.getAiModel(),
+                    vo.getResponseTimeMs(), 1, null);
+
+            // 分诊历史（患者端用）
             saveTriageLog(vo, request);
 
             return vo;
@@ -267,6 +273,7 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public DiagnosisVO diagnosis(DiagnosisRequest request) {
+        long startTime = System.currentTimeMillis();
         try {
             checkRateLimit(request.getPatientId());
 
@@ -288,7 +295,14 @@ public class AiServiceImpl implements AiService {
             vo.setAiModel(aiConfig.getModel());
             vo.setStatus(DiagnosisVO.STATUS_COMPLETE);
 
-            saveDiagnosisLog(vo, request);
+            // 统一日志
+            int responseMs = (int) (System.currentTimeMillis() - startTime);
+            String symptomStr = safeStringify(request.getSymptomData());
+            saveAiCallLog(vo.getDiagnosisId(), 1, request.getPatientId(), request.getDoctorId(),
+                    truncate(extractSummary(request.getSymptomData()), 255),
+                    symptomStr, vo.getAnalysisResult(),
+                    vo.getConfidenceScore(), vo.getAiModel(),
+                    responseMs, 1, null);
 
             return vo;
 
@@ -302,16 +316,16 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public DiagnosisVO getDiagnosisReport(String diagnosisId) {
-        DiagnosisResult result = diagnosisResultMapper.selectOne(
-                new LambdaQueryWrapper<DiagnosisResult>()
-                        .eq(DiagnosisResult::getDiagnosisId, diagnosisId));
+        AiCallLog result = aiCallLogMapper.selectOne(
+                new LambdaQueryWrapper<AiCallLog>()
+                        .eq(AiCallLog::getCallId, diagnosisId));
         if (result == null) {
             throw new BusinessException("诊断报告不存在");
         }
         return DiagnosisVO.builder()
-                .diagnosisId(result.getDiagnosisId())
+                .diagnosisId(result.getCallId())
                 .confidenceScore(result.getConfidenceScore())
-                .analysisResult(result.getAnalysisResult())
+                .analysisResult(result.getOutputData())
                 .status(result.getStatus())
                 .aiModel(result.getAiModel())
                 .needsManualReview(result.getConfidenceScore() != null
@@ -323,6 +337,7 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public PrescriptionAuditVO prescriptionCheck(PrescriptionCheckRequest request) {
+        long startTime = System.currentTimeMillis();
         try {
             checkRateLimit(request.getPatientId());
 
@@ -339,6 +354,17 @@ public class AiServiceImpl implements AiService {
             log.info("AI 处方审核原始返回: {}", rawResponse);
             PrescriptionAuditVO vo = parsePrescriptionCheckResponse(rawResponse, request);
             vo.setAiModel(aiConfig.getModel());
+
+            // 统一日志
+            int responseMs = (int) (System.currentTimeMillis() - startTime);
+            String itemsStr = formatPrescriptionItems(request.getItems());
+            saveAiCallLog(vo.getAuditId(), 2, request.getPatientId(), request.getDoctorId(),
+                    truncate(itemsStr, 255), itemsStr, vo.getSummary(),
+                    vo.getConfidenceScore(), vo.getAiModel(),
+                    responseMs, 1, null);
+
+            // 处方审核业务记录
+            savePrescriptionAuditLog(vo, request);
 
             return vo;
 
@@ -371,7 +397,12 @@ public class AiServiceImpl implements AiService {
             vo.setAiModel(aiConfig.getModel());
             vo.setIsConfirmed(false);
 
-            saveGenerationLog(vo, request, rawResponse);
+            // 记录到统一日志
+            saveAiCallLog(vo.getGenerationId(), 1, request.getPatientId(), request.getDoctorId(),
+                    truncate(request.getDialogueText(), 255),
+                    request.getDialogueText(), rawResponse,
+                    null, vo.getAiModel(),
+                    vo.getResponseTimeMs(), 1, null);
 
             return vo;
 
@@ -385,19 +416,18 @@ public class AiServiceImpl implements AiService {
 
     @Override
     public void confirmRecord(String generationId, RecordGenerateRequest.ConfirmBody body) {
-        GenerationLog log = generationLogMapper.selectOne(
-                new LambdaQueryWrapper<GenerationLog>()
-                        .eq(GenerationLog::getGenerationId, generationId));
+        AiCallLog log = aiCallLogMapper.selectOne(
+                new LambdaQueryWrapper<AiCallLog>()
+                        .eq(AiCallLog::getCallId, generationId));
         if (log == null) {
             throw new BusinessException("生成记录不存在");
         }
-        log.setIsConfirmed(1);
         try {
-            log.setGeneratedContent(objectMapper.writeValueAsString(body.getRecordPreview()));
+            log.setOutputData(objectMapper.writeValueAsString(body.getRecordPreview()));
         } catch (JsonProcessingException ignored) {
-            log.setGeneratedContent(String.valueOf(body.getRecordPreview()));
+            log.setOutputData(String.valueOf(body.getRecordPreview()));
         }
-        generationLogMapper.updateById(log);
+        aiCallLogMapper.updateById(log);
     }
 
     // ==================== 影像诊断（预留） ====================
@@ -440,6 +470,7 @@ public class AiServiceImpl implements AiService {
                 "\"confidenceScore\":0.0, \"analysisDetail\":\"\" }");
 
         Map<String, String> vars = new HashMap<>();
+        vars.put("dept_hint", deptHint);
         vars.put("chief_complaint", sanitizeInput(request.getChiefComplaint()));
         vars.put("age", String.valueOf(ctx.getAge()));
         vars.put("gender", ctx.getGender() == 1 ? "男" : "女");
@@ -906,51 +937,135 @@ public class AiServiceImpl implements AiService {
 
     // ==================== 日志记录 ====================
 
+    /** 保存分诊日志到 triage_log（患者端分诊历史用） */
     private void saveTriageLog(TriageVO vo, TriageRequest request) {
-        TriageLog log = new TriageLog();
-        log.setTriageId(vo.getTriageId());
-        log.setPatientId(request.getPatientId());
-        log.setChiefComplaint(request.getChiefComplaint());
-        if (vo.getRecommendedDepartment() != null) {
-            log.setRecommendedDepartmentId(vo.getRecommendedDepartment().getDepartmentId());
-            log.setRecommendedDepartmentName(vo.getRecommendedDepartment().getDepartmentName());
+        try {
+            TriageLog tl = new TriageLog();
+            tl.setTriageId(vo.getTriageId());
+            tl.setPatientId(request.getPatientId());
+            tl.setChiefComplaint(truncate(request.getChiefComplaint(), 500));
+            if (vo.getRecommendedDepartment() != null) {
+                tl.setRecommendedDepartmentId(vo.getRecommendedDepartment().getDepartmentId());
+                tl.setRecommendedDepartmentName(vo.getRecommendedDepartment().getDepartmentName());
+            }
+            if (vo.getRecommendedDoctors() != null && !vo.getRecommendedDoctors().isEmpty()) {
+                TriageVO.DoctorInfo doc = vo.getRecommendedDoctors().get(0);
+                tl.setRecommendedDoctorId(doc.getDoctorId());
+                tl.setRecommendedDoctorName(doc.getDoctorName());
+            }
+            tl.setConfidenceScore(vo.getConfidenceScore());
+            tl.setAnalysisDetail(vo.getAnalysisDetail());
+            tl.setStatus(1);
+            tl.setAiModel(vo.getAiModel());
+            tl.setResponseTimeMs(vo.getResponseTimeMs());
+            triageLogMapper.insert(tl);
+        } catch (Exception e) {
+            log.warn("保存分诊日志失败: {}", e.getMessage());
         }
-        log.setConfidenceScore(vo.getConfidenceScore());
-        log.setAnalysisDetail(vo.getAnalysisDetail());
-        log.setStatus(1); // 完成
-        log.setAiModel(vo.getAiModel());
-        log.setResponseTimeMs(vo.getResponseTimeMs());
-        triageLogMapper.insert(log);
     }
 
-    private void saveDiagnosisLog(DiagnosisVO vo, DiagnosisRequest request) {
-        DiagnosisResult result = new DiagnosisResult();
-        result.setDiagnosisId(vo.getDiagnosisId());
-        result.setPatientId(request.getPatientId());
-        result.setDoctorId(request.getDoctorId());
-        result.setDiagnosisType(request.getDiagnosisType());
+    /** 保存处方审核业务记录到 prescription_audit_log */
+    private void savePrescriptionAuditLog(PrescriptionAuditVO vo, PrescriptionCheckRequest request) {
         try {
-            result.setSymptomData(objectMapper.writeValueAsString(request.getSymptomData()));
-        } catch (JsonProcessingException ignored) {}
-        result.setConfidenceScore(vo.getConfidenceScore());
-        result.setAnalysisResult(vo.getAnalysisResult());
-        result.setStatus(vo.getStatus());
-        result.setAiModel(vo.getAiModel());
-        diagnosisResultMapper.insert(result);
+            PrescriptionAuditLog auditLog = new PrescriptionAuditLog();
+            auditLog.setAuditId(vo.getAuditId());
+            auditLog.setPrescriptionId(request.getPrescriptionId());
+            auditLog.setPatientId(request.getPatientId());
+            auditLog.setAuditType(0); // 0=AI审核
+            auditLog.setRiskLevel(mapRiskLevel(vo.getOverallResult()));
+            auditLog.setAuditResult(vo.getOverallResult());
+            auditLog.setDrugInteractions(extractDrugInteractions(vo.getItems()));
+            auditLog.setSuggestions(vo.getSummary());
+            auditLog.setAuditTime(LocalDateTime.now());
+            prescriptionAuditLogMapper.insert(auditLog);
+        } catch (Exception e) {
+            log.warn("保存处方审核记录失败: {}", e.getMessage());
+        }
     }
 
-    private void saveGenerationLog(RecordGenerateVO vo, RecordGenerateRequest request, String rawResponse) {
-        GenerationLog log = new GenerationLog();
-        log.setGenerationId(vo.getGenerationId());
-        log.setTargetType(0); // 0=病历
-        log.setSourceText(request.getDialogueText());
+    private int mapRiskLevel(String overallResult) {
+        if (overallResult == null) return 0;
+        return switch (overallResult) {
+            case PrescriptionAuditVO.REJECT -> 2;
+            case PrescriptionAuditVO.WARNING, PrescriptionAuditVO.MANUAL -> 1;
+            default -> 0;
+        };
+    }
+
+    private String extractDrugInteractions(List<PrescriptionAuditVO.AuditItem> items) {
+        if (items == null || items.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        for (PrescriptionAuditVO.AuditItem item : items) {
+            if (item.getChecks() == null) continue;
+            for (PrescriptionAuditVO.AuditCheck check : item.getChecks()) {
+                if (check.getCheckType() != null
+                        && (check.getCheckType().contains("相互作用") || check.getCheckType().contains("药物相互作用"))) {
+                    sb.append(item.getDrugName()).append(": ").append(check.getDetail()).append("; ");
+                }
+            }
+        }
+        return sb.isEmpty() ? null : sb.toString();
+    }
+
+    /** 统一保存 AI 调用日志到 ai_call_log 表 */
+    private void saveAiCallLog(String callId, int callType, String patientId, String doctorId,
+                                String inputSummary, String inputData, String outputData,
+                                BigDecimal confidenceScore, String aiModel,
+                                int responseTimeMs, int status, String errorMessage) {
+        AiCallLog callLog = new AiCallLog();
+        callLog.setCallId(callId);
+        callLog.setCallType(callType);
+        callLog.setPatientId(patientId);
+        callLog.setDoctorId(doctorId);
+        callLog.setInputSummary(inputSummary);
+        callLog.setInputData(inputData);
+        callLog.setOutputData(outputData);
+        callLog.setConfidenceScore(confidenceScore);
+        callLog.setAiModel(aiModel);
+        callLog.setResponseTimeMs(responseTimeMs);
+        callLog.setStatus(status);
+        callLog.setErrorMessage(errorMessage);
         try {
-            log.setGeneratedContent(objectMapper.writeValueAsString(vo.getRecordPreview()));
-        } catch (JsonProcessingException ignored) {}
-        log.setIsConfirmed(0);
-        log.setResponseTimeMs(vo.getResponseTimeMs());
-        log.setStatus(1); // 成功
-        generationLogMapper.insert(log);
+            aiCallLogMapper.insert(callLog);
+        } catch (Exception e) {
+            log.warn("保存 AI 调用日志失败: {}", e.getMessage());
+        }
+    }
+
+    /** 安全转换对象为 JSON 字符串 */
+    private String safeStringify(Object obj) {
+        if (obj == null) return "";
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            return String.valueOf(obj);
+        }
+    }
+
+    /** 从症状数据中提取摘要 */
+    private String extractSummary(Map<String, Object> symptomData) {
+        if (symptomData == null || symptomData.isEmpty()) return "";
+        Object cc = symptomData.get("chiefComplaint");
+        return cc != null ? String.valueOf(cc) : "";
+    }
+
+    /** 格式化处方药品为摘要字符串 */
+    private String formatPrescriptionItems(List<PrescriptionCheckRequest.DrugItem> items) {
+        if (items == null || items.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (PrescriptionCheckRequest.DrugItem item : items) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append(item.getDrugName());
+            if (item.getDosage() != null) sb.append(" ").append(item.getDosage());
+            if (item.getFrequency() != null) sb.append(" ").append(item.getFrequency());
+        }
+        return sb.toString();
+    }
+
+    /** 截断字符串到指定长度 */
+    private String truncate(String str, int maxLen) {
+        if (str == null) return "";
+        return str.length() <= maxLen ? str : str.substring(0, maxLen);
     }
 
     // ==================== Mock 数据 ====================
