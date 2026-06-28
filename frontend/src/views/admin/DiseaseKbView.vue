@@ -22,6 +22,7 @@
             <el-tag v-for="s in (row.symptoms || [])" :key="s" size="small" style="margin:1px 3px">{{ s }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="riskFactors" label="危险因素" min-width="180" show-overflow-tooltip />
         <el-table-column prop="diagnosisBasis" label="诊断依据" min-width="200" show-overflow-tooltip />
         <el-table-column prop="treatmentPlan" label="治疗方案" min-width="200" show-overflow-tooltip />
         <el-table-column label="操作" width="150" fixed="right">
@@ -65,6 +66,9 @@
             <el-option label="乏力" value="乏力" />
           </el-select>
         </el-form-item>
+        <el-form-item label="危险因素">
+          <el-input v-model="form.riskFactors" placeholder="如 免疫力低下、季节变化、接触感染者" maxlength="500" />
+        </el-form-item>
         <el-form-item label="诊断依据" prop="diagnosisBasis">
           <el-input v-model="form.diagnosisBasis" type="textarea" :rows="2" placeholder="诊断依据" maxlength="500" />
         </el-form-item>
@@ -101,6 +105,7 @@ const form = reactive({
   icdCode: '',
   category: '',
   symptoms: [] as string[],
+  riskFactors: '',
   diagnosisBasis: '',
   treatmentPlan: ''
 })
@@ -130,6 +135,7 @@ function openCreate() {
   form.icdCode = ''
   form.category = ''
   form.symptoms = []
+  form.riskFactors = ''
   form.diagnosisBasis = ''
   form.treatmentPlan = ''
   dialogVisible.value = true
@@ -142,6 +148,7 @@ function openEdit(row: any) {
   form.icdCode = row.icdCode
   form.category = row.category
   form.symptoms = row.symptoms || []
+  form.riskFactors = row.riskFactors || ''
   form.diagnosisBasis = row.diagnosisBasis
   form.treatmentPlan = row.treatmentPlan
   dialogVisible.value = true
