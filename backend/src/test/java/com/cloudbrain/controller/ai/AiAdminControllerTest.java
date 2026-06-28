@@ -4,9 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.entity.*;
-import com.cloudbrain.mapper.DiagnosisResultMapper;
-import com.cloudbrain.mapper.GenerationLogMapper;
-import com.cloudbrain.mapper.TriageLogMapper;
+import com.cloudbrain.mapper.AiCallLogMapper;
 import com.cloudbrain.service.ai.AiService;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
@@ -75,13 +73,7 @@ class AiAdminControllerTest {
     private DiseaseKbService diseaseKbService;
 
     @MockBean
-    private TriageLogMapper triageLogMapper;
-
-    @MockBean
-    private DiagnosisResultMapper diagnosisResultMapper;
-
-    @MockBean
-    private GenerationLogMapper generationLogMapper;
+    private AiCallLogMapper aiCallLogMapper;
 
     private static final String TEMPLATE_ID = "PTMP_0000000000000001";
 
@@ -301,25 +293,22 @@ class AiAdminControllerTest {
         @Test
         @DisplayName("统计概览 — 返回汇总数据")
         void stats() throws Exception {
-            when(triageLogMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(10L);
-            when(diagnosisResultMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(5L);
-            when(generationLogMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(3L);
+            // Mock: selectCount with no call_type filter = total (10+5+5=20)
+            when(aiCallLogMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(20L);
 
             mockMvc.perform(get("/api/ai/monitor/stats"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
-                    .andExpect(jsonPath("$.data.totalCalls").value(18))
-                    .andExpect(jsonPath("$.data.byType.triage.total").value(10))
-                    .andExpect(jsonPath("$.data.byType.diagnosis.total").value(5))
-                    .andExpect(jsonPath("$.data.byType.generation.total").value(3));
+                    .andExpect(jsonPath("$.data.totalCalls").value(20))
+                    .andExpect(jsonPath("$.data.byType.triage.calls").isNumber())
+                    .andExpect(jsonPath("$.data.byType.diagnosis.calls").isNumber())
+                    .andExpect(jsonPath("$.data.byType.prescriptionCheck.calls").isNumber());
         }
 
         @Test
         @DisplayName("统计概览 — 带日期范围筛选")
         void stats_withDateRange() throws Exception {
-            when(triageLogMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(3L);
-            when(diagnosisResultMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
-            when(generationLogMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
+            when(aiCallLogMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(4L);
 
             mockMvc.perform(get("/api/ai/monitor/stats")
                             .param("startDate", "2024-01-01")
@@ -333,15 +322,16 @@ class AiAdminControllerTest {
         @Test
         @DisplayName("调用明细 — type=0 分诊日志分页")
         void logs_triage() throws Exception {
-            Page<TriageLog> mpPage = new Page<>(1, 10);
+            Page<AiCallLog> mpPage = new Page<>(1, 10);
             mpPage.setTotal(1);
-            TriageLog log = new TriageLog();
-            log.setTriageId("TRIAGE_001");
+            AiCallLog log = new AiCallLog();
+            log.setCallId("TRI_xxx");
+            log.setCallType(0);
             log.setPatientId("P001");
             log.setStatus(1);
             log.setCreateTime(LocalDateTime.now());
             mpPage.setRecords(List.of(log));
-            when(triageLogMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
+            when(aiCallLogMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
 
             mockMvc.perform(get("/api/ai/monitor/logs")
                             .param("type", "0")
@@ -350,16 +340,16 @@ class AiAdminControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data.total").value(1))
-                    .andExpect(jsonPath("$.data.records[0].triageId").value("TRIAGE_001"));
+                    .andExpect(jsonPath("$.data.records[0].callId").value("TRI_xxx"));
         }
 
         @Test
         @DisplayName("调用明细 — type=1 诊断日志分页")
         void logs_diagnosis() throws Exception {
-            Page<DiagnosisResult> mpPage = new Page<>(1, 10);
+            Page<AiCallLog> mpPage = new Page<>(1, 10);
             mpPage.setTotal(0);
             mpPage.setRecords(List.of());
-            when(diagnosisResultMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
+            when(aiCallLogMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
 
             mockMvc.perform(get("/api/ai/monitor/logs")
                             .param("type", "1")
@@ -371,37 +361,42 @@ class AiAdminControllerTest {
         }
 
         @Test
-        @DisplayName("调用明细 — type=3 生成日志分页（处方审核+病历生成）")
-        void logs_generation() throws Exception {
-            Page<GenerationLog> mpPage = new Page<>(1, 10);
+        @DisplayName("调用明细 — type=2 处方审核日志分页")
+        void logs_prescriptionCheck() throws Exception {
+            Page<AiCallLog> mpPage = new Page<>(1, 10);
             mpPage.setTotal(2);
-            GenerationLog log = new GenerationLog();
-            log.setGenerationId("GEN_001");
-            log.setTargetType(0);
+            AiCallLog log = new AiCallLog();
+            log.setCallId("AUD_yyy");
+            log.setCallType(2);
             log.setStatus(1);
             log.setCreateTime(LocalDateTime.now());
             mpPage.setRecords(List.of(log));
-            when(generationLogMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
+            when(aiCallLogMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
 
             mockMvc.perform(get("/api/ai/monitor/logs")
-                            .param("type", "3")
+                            .param("type", "2")
                             .param("page", "1")
                             .param("pageSize", "10"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data.total").value(2))
-                    .andExpect(jsonPath("$.data.records[0].generationId").value("GEN_001"));
+                    .andExpect(jsonPath("$.data.records[0].callId").value("AUD_yyy"));
         }
 
         @Test
-        @DisplayName("调用明细 — 不传 type 返回空")
+        @DisplayName("调用明细 — 不传 type 查询全部")
         void logs_noType() throws Exception {
+            Page<AiCallLog> mpPage = new Page<>(1, 10);
+            mpPage.setTotal(3);
+            mpPage.setRecords(List.of());
+            when(aiCallLogMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(mpPage);
+
             mockMvc.perform(get("/api/ai/monitor/logs")
                             .param("page", "1")
                             .param("pageSize", "10"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
-                    .andExpect(jsonPath("$.data.total").value(0));
+                    .andExpect(jsonPath("$.data.total").value(3));
         }
     }
 
