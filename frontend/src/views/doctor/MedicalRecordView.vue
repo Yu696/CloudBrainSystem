@@ -56,6 +56,9 @@
                 <el-divider />
 
                 <div class="form-actions">
+                  <el-button type="warning" plain @click="handleAiPreDiagnosis" :loading="diagnosing" :disabled="!patientInfo?.patientId">
+                    <el-icon><MagicStick /></el-icon>AI预诊
+                  </el-button>
                   <el-button @click="handleSave" :loading="saving">
                     <el-icon><FolderChecked /></el-icon>保存草稿
                   </el-button>
@@ -93,6 +96,46 @@
         </el-col>
       </el-row>
     </div>
+
+    <!-- AI预诊结果对话框 -->
+    <el-dialog v-model="showDiagnosisDialog" title="AI 预诊结果" width="700px">
+      <div v-if="diagnosisResult" class="diagnosis-content">
+        <div class="diag-overall">
+          <el-tag :type="diagnosisResult.needsManualReview ? 'warning' : 'success'" size="large">
+            {{ diagnosisResult.needsManualReview ? '建议人工复核' : 'AI 诊断完成' }}
+          </el-tag>
+          <span class="diag-score">置信度 {{ (diagnosisResult.confidenceScore * 100).toFixed(0) }}%</span>
+        </div>
+        <div v-if="diagnosisResult.diseaseMatches?.length" class="diag-diseases">
+          <div class="diag-section-title">疑似疾病</div>
+          <div v-for="(d, idx) in diagnosisResult.diseaseMatches" :key="idx" class="diag-disease-item">
+            <div class="diag-disease-header">
+              <strong>{{ d.diseaseName }}</strong>
+              <el-tag size="small" type="info">{{ d.icdCode }}</el-tag>
+              <span class="diag-disease-conf">{{ (d.confidence * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="diag-disease-basis">诊断依据：{{ d.diagnosisBasis }}</div>
+            <div v-if="d.differentialDiagnosis?.length" class="diag-disease-diff">
+              鉴别诊断：{{ d.differentialDiagnosis.join('、') }}
+            </div>
+          </div>
+        </div>
+        <div class="diag-conclusion">
+          <div class="diag-section-title">分析结论</div>
+          <p v-if="diagnosisResult.analysisResult">{{ diagnosisResult.analysisResult }}</p>
+          <el-empty v-else description="AI 未返回有效的分析结论，请补充更多症状信息后重试" :image-size="60" />
+        </div>
+      </div>
+      <div v-if="fallbackMode && !diagnosisResult" class="diag-fallback">
+        <el-alert title="AI 服务暂不可用" type="warning" description="请根据临床经验进行诊断" show-icon :closable="false" />
+      </div>
+      <template #footer>
+        <el-button @click="showDiagnosisDialog = false">关闭</el-button>
+        <el-button v-if="diagnosisResult?.diagnosisId" type="primary" @click="goReport">
+          查看完整报告
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -100,10 +143,11 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Select } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Select, MagicStick } from '@element-plus/icons-vue'
 import { createMedicalRecordApi, updateMedicalRecordApi, completeMedicalRecordApi, getMedicalRecordDetailApi } from '@/api/medical'
 import { getAppointmentDetailApi, getMyDoctorInfoApi } from '@/api/appointment'
 import { getPatientInfoApi } from '@/api/patient'
+import { diagnosisApi } from '@/api/ai'
 import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
 
@@ -120,6 +164,10 @@ const recordStatus = ref(0)
 const patientInfo = ref<any>(null)
 const appointmentId = route.params.appointmentId as string
 const myDoctorId = ref('')
+const diagnosing = ref(false)
+const showDiagnosisDialog = ref(false)
+const diagnosisResult = ref<any>(null)
+const fallbackMode = ref(false)
 
 const form = reactive({
   chiefComplaint: '',
@@ -184,6 +232,18 @@ async function loadAppointmentInfo() {
       try {
         const pRes = await getPatientInfoApi(appt.patientId)
         patientInfo.value = pRes.data
+        // 从预约和患者档案预填表单
+        if (!currentRecordId.value) {
+          form.chiefComplaint = appt.symptoms || ''
+          const allergies = patientInfo.value?.allergyHistory || ''
+          const medical = patientInfo.value?.medicalHistory || ''
+          const genetic = patientInfo.value?.geneticDiseases || ''
+          const parts: string[] = []
+          if (allergies) parts.push(`过敏史：${allergies}`)
+          if (medical) parts.push(`既往病史：${medical}`)
+          if (genetic) parts.push(`遗传病史：${genetic}`)
+          form.pastHistory = parts.join('；')
+        }
       } catch { /* ignore */ }
     }
   } catch {
@@ -259,6 +319,42 @@ function goPrescription() {
 function goExam() {
   router.push(`/doctor/exam/${currentRecordId.value}`)
 }
+
+async function handleAiPreDiagnosis() {
+  if (!patientInfo.value?.patientId) return
+  diagnosing.value = true
+  fallbackMode.value = false
+  diagnosisResult.value = null
+  try {
+    const res = await diagnosisApi({
+      patientId: patientInfo.value.patientId,
+      doctorId: myDoctorId.value || userStore.userInfo?.userId || '',
+      diagnosisType: 0,
+      symptomData: {
+        chiefComplaint: form.chiefComplaint,
+        presentIllness: form.presentIllness,
+        physicalExam: form.physicalExam,
+        auxiliaryExam: form.auxiliaryExam
+      }
+    })
+    diagnosisResult.value = res.data
+    if (res.data?.diagnosisId === 'FALLBACK' || !res.data?.analysisResult) {
+      fallbackMode.value = true
+    }
+    showDiagnosisDialog.value = true
+  } catch (err: any) {
+    fallbackMode.value = true
+    showDiagnosisDialog.value = true
+  } finally {
+    diagnosing.value = false
+  }
+}
+
+function goReport() {
+  if (diagnosisResult.value?.diagnosisId) {
+    router.push(`/ai/diagnosis-report/${diagnosisResult.value.diagnosisId}`)
+  }
+}
 </script>
 
 <style scoped>
@@ -308,5 +404,89 @@ function goExam() {
 
 .info-val.warning {
   color: var(--cb-danger);
+}
+
+/* AI预诊结果 */
+.diagnosis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diag-overall {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--cb-background);
+  border-radius: var(--cb-radius-md);
+}
+
+.diag-score {
+  margin-left: auto;
+  font-size: var(--cb-font-sm);
+  color: var(--cb-text-secondary);
+}
+
+.diag-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cb-text-primary);
+  margin-bottom: 8px;
+}
+
+.diag-disease-item {
+  padding: 12px;
+  background: var(--cb-background);
+  border-radius: var(--cb-radius-md);
+  margin-bottom: 8px;
+}
+
+.diag-disease-item:last-child {
+  margin-bottom: 0;
+}
+
+.diag-disease-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diag-disease-header strong {
+  font-size: 15px;
+  color: var(--cb-text-primary);
+}
+
+.diag-disease-conf {
+  margin-left: auto;
+  color: var(--cb-primary);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.diag-disease-basis,
+.diag-disease-diff {
+  font-size: 13px;
+  color: var(--cb-text-secondary);
+  line-height: 1.6;
+}
+
+.diag-disease-diff {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--cb-border);
+}
+
+.diag-conclusion p {
+  color: var(--cb-text-secondary);
+  line-height: 1.8;
+  font-size: 14px;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.diag-fallback {
+  padding: 16px 0;
 }
 </style>

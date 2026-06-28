@@ -94,7 +94,8 @@
 
               <div class="result-block">
                 <div class="block-label">分析结论</div>
-                <div class="conclusion-text">{{ diagnosisResult.analysisResult }}</div>
+                <div v-if="diagnosisResult.analysisResult" class="conclusion-text">{{ diagnosisResult.analysisResult }}</div>
+                <el-empty v-else description="AI 未返回有效的分析结论，请补充更多症状信息后重试" :image-size="60" />
               </div>
 
               <div class="form-action-bar" style="margin-top:16px">
@@ -225,6 +226,10 @@ onMounted(async () => {
     } catch {
       ElMessage.error('获取患者信息失败')
     }
+  }
+  // 从路由参数预填主诉（由待诊列表/患者列表传入）
+  if (route.query.complaint) {
+    form.chiefComplaint = route.query.complaint as string
   }
   loading.value = false
 })

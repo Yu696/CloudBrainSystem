@@ -12,8 +12,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Prompt 模板服务实现
@@ -125,7 +128,12 @@ public class PromptTemplateServiceImpl
         }
         // 检查是否有未替换的占位符
         if (result.contains("{{")) {
-            log.warn("Prompt 模板存在未替换的变量占位符");
+            List<String> unreplaced = new ArrayList<>();
+            Matcher m = Pattern.compile("\\{\\{(.+?)}}").matcher(result);
+            while (m.find()) {
+                unreplaced.add(m.group(1));
+            }
+            log.warn("Prompt 模板存在未替换的变量占位符: {}", unreplaced);
         }
         return result;
     }
