@@ -110,21 +110,6 @@
 
             <el-divider />
 
-            <!-- AI 处方审核 -->
-            <div class="audit-trigger-row">
-              <el-button type="warning" plain @click="handleAiAudit" :loading="auditLoading" :disabled="!canAudit">
-                <el-icon><MagicStick /></el-icon>AI 处方审核
-              </el-button>
-              <span v-if="!canAudit" class="audit-hint">请先填写药品名称后发起审核</span>
-            </div>
-            <PrescriptionAuditPanel
-              :audit-result="auditResult"
-              :loading="auditLoading"
-              :fallback-mode="auditFallbackMode"
-            />
-
-            <el-divider />
-
             <div class="total-row">
               <span class="total-label">处方总额：</span>
               <span class="total-value">¥{{ totalAmount.toFixed(2) }}</span>
@@ -146,10 +131,9 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, FirstAidKit, Plus, Delete, MagicStick } from '@element-plus/icons-vue'
-import { createPrescriptionApi, updatePrescriptionApi, getPrescriptionDetailApi, getMedicalRecordDetailApi } from '@/api/medical'
-import { prescriptionCheckApi } from '@/api/ai'
-import PrescriptionAuditPanel from '@/components/ai/PrescriptionAuditPanel.vue'
+import { ArrowLeft, FirstAidKit, Plus, Delete } from '@element-plus/icons-vue'
+import { createPrescriptionApi, updatePrescriptionApi, getPrescriptionDetailApi } from '@/api/medical'
+import { getMedicalRecordDetailApi } from '@/api/medical'
 import type { FormInstance } from 'element-plus'
 
 const router = useRouter()
@@ -164,11 +148,6 @@ const loading = ref(false)
 const saving = ref(false)
 const submitting = ref(false)
 const recordInfo = ref<any>(null)
-
-// AI 处方审核状态
-const auditResult = ref<any>(null)
-const auditLoading = ref(false)
-const auditFallbackMode = ref(false)
 
 interface DrugItem {
   drugId: string
@@ -207,10 +186,6 @@ const totalAmount = computed(() => {
   return form.items.reduce((sum, item) => {
     return sum + (item.unitPrice || 0) * (item.quantity || 0)
   }, 0)
-})
-
-const canAudit = computed(() => {
-  return form.items.some((item: DrugItem) => item.drugName.trim() !== '')
 })
 
 onMounted(async () => {
@@ -300,38 +275,6 @@ async function handleSubmit() {
   } catch { /* handled by interceptor */ }
   finally { submitting.value = false }
 }
-
-async function handleAiAudit() {
-  if (!canAudit.value) return
-  auditLoading.value = true
-  auditResult.value = null
-  auditFallbackMode.value = false
-  try {
-    const data = {
-      prescriptionId: isEdit ? prescriptionId : '',
-      recordId: isEdit ? editRecordId.value : recordId,
-      patientId: recordInfo.value?.patientId || '',
-      doctorId: recordInfo.value?.doctorId || '',
-      items: form.items.map((item: DrugItem) => ({
-        drugId: item.drugId,
-        drugName: item.drugName,
-        dosage: item.dosage,
-        frequency: item.frequency,
-        days: item.days
-      }))
-    }
-    const res = await prescriptionCheckApi(data)
-    auditResult.value = (res.data as any)?.auditResult || res.data
-  } catch (err: any) {
-    if (err.response?.status === 500 || err.message?.includes('AI 服务')) {
-      auditFallbackMode.value = true
-    } else {
-      ElMessage.error('AI 审核请求失败')
-    }
-  } finally {
-    auditLoading.value = false
-  }
-}
 </script>
 
 <style scoped>
@@ -390,18 +333,6 @@ async function handleAiAudit() {
   color: var(--cb-danger);
   font-size: 22px;
   font-weight: 700;
-}
-
-.audit-trigger-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.audit-hint {
-  font-size: var(--cb-font-xs);
-  color: var(--cb-text-placeholder);
 }
 
 .form-actions {

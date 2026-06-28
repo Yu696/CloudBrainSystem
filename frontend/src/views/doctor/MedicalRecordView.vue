@@ -90,14 +90,6 @@
               <el-empty v-else description="加载中..." :image-size="60" />
             </div>
           </div>
-          <div v-if="patientInfo?.patientId && myDoctorId" style="margin-top: 16px">
-            <AiAssistPanel
-              :patient-id="patientInfo.patientId"
-              :doctor-id="myDoctorId"
-              :appointment-id="appointmentId"
-              @apply="handleAiApply"
-            />
-          </div>
         </el-col>
       </el-row>
     </div>
@@ -112,7 +104,6 @@ import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Se
 import { createMedicalRecordApi, updateMedicalRecordApi, completeMedicalRecordApi, getMedicalRecordDetailApi } from '@/api/medical'
 import { getAppointmentDetailApi, getMyDoctorInfoApi } from '@/api/appointment'
 import { getPatientInfoApi } from '@/api/patient'
-import AiAssistPanel from '@/components/ai/AiAssistPanel.vue'
 import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
 
@@ -267,16 +258,6 @@ function goPrescription() {
 
 function goExam() {
   router.push(`/doctor/exam/${currentRecordId.value}`)
-}
-
-function handleAiApply(preview: any) {
-  if (preview.chiefComplaint) form.chiefComplaint = preview.chiefComplaint
-  if (preview.presentIllness) form.presentIllness = preview.presentIllness
-  if (preview.pastHistory) form.pastHistory = preview.pastHistory
-  if (preview.physicalExam) form.physicalExam = preview.physicalExam
-  if (preview.preliminaryDiagnosis) form.diagnosis = preview.preliminaryDiagnosis
-  if (preview.treatmentPlan) form.treatmentOpinion = preview.treatmentPlan
-  ElMessage.success('AI 生成内容已应用到表单，请核对后保存')
 }
 </script>
 
