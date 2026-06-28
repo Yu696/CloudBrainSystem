@@ -60,10 +60,13 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="建档时间" width="170" />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click.stop="router.push(`/patient/detail/${row.patientId}`)">
               详情
+            </el-button>
+            <el-button type="warning" link size="small" @click.stop="router.push(`/ai/diagnosis/${row.patientId}`)">
+              AI诊断
             </el-button>
           </template>
         </el-table-column>

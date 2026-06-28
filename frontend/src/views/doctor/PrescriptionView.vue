@@ -117,6 +117,9 @@
 
             <div class="form-actions">
               <el-button @click="router.back()">返回</el-button>
+              <el-button type="warning" plain @click="handleAiAudit" :loading="auditing">
+                <el-icon><MagicStick /></el-icon>AI 审核
+              </el-button>
               <el-button @click="handleSaveDraft" :loading="saving">保存草稿</el-button>
               <el-button type="primary" size="large" @click="handleSubmit" :loading="submitting">提交处方</el-button>
             </div>
@@ -124,6 +127,47 @@
         </div>
       </div>
     </div>
+
+    <!-- AI 审核结果对话框 -->
+    <el-dialog v-model="showAuditDialog" title="AI 处方审核结果" width="700px">
+      <div v-if="auditResult" class="audit-content">
+        <div class="audit-overall" :class="auditClass">
+          <span class="audit-label">审核结论：</span>
+          <el-tag :type="auditTagType" size="large">{{ auditResult.overallResultName || auditResult.overallResult }}</el-tag>
+          <span v-if="auditResult.confidenceScore" class="audit-score">
+            置信度：{{ (auditResult.confidenceScore * 100).toFixed(0) }}%
+          </span>
+        </div>
+        <div v-if="auditResult.patientContext" class="audit-context">
+          <el-alert v-if="auditResult.patientContext.allergyHistory" title="过敏史提醒" :description="auditResult.patientContext.allergyHistory" type="warning" show-icon :closable="false" />
+        </div>
+        <div v-if="auditResult.items && auditResult.items.length" class="audit-items">
+          <div v-for="(item, idx) in auditResult.items" :key="idx" class="audit-drug">
+            <div class="audit-drug-header">
+              <span class="drug-name">{{ item.drugName }}</span>
+              <el-tag :type="itemAuditTag(item.result)" size="small">{{ item.resultName || item.result }}</el-tag>
+            </div>
+            <div v-if="item.checks && item.checks.length" class="audit-checks">
+              <div v-for="(check, cIdx) in item.checks" :key="cIdx" class="audit-check-item">
+                <el-tag :type="itemAuditTag(check.result)" size="small" effect="plain">{{ check.checkType }}</el-tag>
+                <span class="check-detail">{{ check.detail }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="AI 未返回药品审核明细，请检查处方信息是否完整" :image-size="60" />
+        <div v-if="auditResult.summary" class="audit-summary">
+          <el-divider />
+          <p>{{ auditResult.summary }}</p>
+        </div>
+      </div>
+      <div v-else-if="auditFallbackMode" class="audit-fallback">
+        <el-alert title="AI 服务暂不可用" type="warning" description="请根据临床经验进行审核" show-icon :closable="false" />
+      </div>
+      <template #footer>
+        <el-button @click="showAuditDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -131,9 +175,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, FirstAidKit, Plus, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, FirstAidKit, Plus, Delete, MagicStick } from '@element-plus/icons-vue'
 import { createPrescriptionApi, updatePrescriptionApi, getPrescriptionDetailApi } from '@/api/medical'
 import { getMedicalRecordDetailApi } from '@/api/medical'
+import { prescriptionCheckApi } from '@/api/ai'
 import type { FormInstance } from 'element-plus'
 
 const router = useRouter()
@@ -147,7 +192,11 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const saving = ref(false)
 const submitting = ref(false)
+const auditing = ref(false)
 const recordInfo = ref<any>(null)
+const showAuditDialog = ref(false)
+const auditResult = ref<any>(null)
+const auditFallbackMode = ref(false)
 
 interface DrugItem {
   drugId: string
@@ -230,6 +279,63 @@ function removeItem(index: number) {
   if (form.items.length > 1) {
     form.items.splice(index, 1)
   }
+}
+
+async function handleAiAudit() {
+  if (!recordInfo.value) {
+    ElMessage.warning('请先加载病历信息')
+    return
+  }
+  auditing.value = true
+  try {
+    const res = await prescriptionCheckApi({
+      prescriptionId: isEdit ? prescriptionId : '',
+      recordId: isEdit ? editRecordId.value : recordId,
+      patientId: recordInfo.value.patientId || '',
+      doctorId: recordInfo.value.doctorId || '',
+      items: form.items.map(it => ({
+        drugId: it.drugId,
+        drugName: it.drugName,
+        dosage: it.dosage,
+        frequency: it.frequency,
+        days: it.days
+      }))
+    })
+    auditFallbackMode.value = false
+    auditResult.value = res.data
+    if (res.data?.auditId === 'FALLBACK' || (!res.data?.summary && !res.data?.items?.length)) {
+      auditFallbackMode.value = true
+    }
+    showAuditDialog.value = true
+  } catch {
+    auditFallbackMode.value = true
+    showAuditDialog.value = true
+  } finally {
+    auditing.value = false
+  }
+}
+
+const auditClass = computed(() => {
+  const r = auditResult.value?.overallResult
+  if (r === 'PASS') return 'audit-pass'
+  if (r === 'WARNING' || r === 'MANUAL') return 'audit-warn'
+  if (r === 'REJECT') return 'audit-reject'
+  return ''
+})
+
+const auditTagType = computed(() => {
+  const r = auditResult.value?.overallResult
+  if (r === 'PASS') return 'success'
+  if (r === 'WARNING' || r === 'MANUAL') return 'warning'
+  if (r === 'REJECT') return 'danger'
+  return 'info'
+})
+
+function itemAuditTag(result: string) {
+  if (result === 'PASS') return 'success'
+  if (result === 'WARNING') return 'warning'
+  if (result === 'REJECT') return 'danger'
+  return 'info'
 }
 
 async function handleSaveDraft() {
@@ -344,5 +450,96 @@ async function handleSubmit() {
 
 .form-actions .el-button {
   min-width: 140px;
+}
+
+/* AI 审核结果 */
+.audit-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.audit-overall {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--cb-radius-md);
+  background: var(--cb-background);
+}
+
+.audit-overall.audit-pass {
+  border-left: 4px solid var(--cb-success);
+}
+
+.audit-overall.audit-warn {
+  border-left: 4px solid var(--cb-warning);
+}
+
+.audit-overall.audit-reject {
+  border-left: 4px solid var(--cb-danger);
+}
+
+.audit-label {
+  font-weight: 600;
+  color: var(--cb-text-primary);
+}
+
+.audit-score {
+  color: var(--cb-text-secondary);
+  font-size: var(--cb-font-sm);
+  margin-left: auto;
+}
+
+.audit-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.audit-drug {
+  background: var(--cb-background);
+  border-radius: var(--cb-radius-md);
+  padding: 12px 16px;
+}
+
+.audit-drug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.drug-name {
+  font-weight: 600;
+  color: var(--cb-text-primary);
+}
+
+.audit-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audit-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--cb-font-sm);
+}
+
+.check-detail {
+  color: var(--cb-text-secondary);
+  line-height: 1.5;
+}
+
+.audit-summary p {
+  color: var(--cb-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.audit-fallback {
+  padding: 16px 0;
 }
 </style>
