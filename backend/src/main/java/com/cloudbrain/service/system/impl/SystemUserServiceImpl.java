@@ -67,7 +67,7 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
         userMapper.insert(user);
 
         // 根据角色创建对应的专业表记录
-        createSpecializedRecord(role.getRoleCode(), user.getUserId());
+        createSpecializedRecord(role.getRoleCode(), user.getUserId(), request.getDepartmentId());
 
         // 创建 user_role 关联
         UserRole userRole = new UserRole();
@@ -79,7 +79,7 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
     }
 
     /** 根据角色编码创建对应的专业表记录 */
-    private void createSpecializedRecord(String roleCode, String userId) {
+    private void createSpecializedRecord(String roleCode, String userId, String departmentId) {
         switch (roleCode) {
             case "admin" -> {
                 SystemUser su = new SystemUser();
@@ -91,7 +91,7 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
                 Doctor doctor = new Doctor();
                 doctor.setDoctorId(UUIDUtil.generateDoctorId());
                 doctor.setUserId(userId);
-                doctor.setDepartmentId("0");
+                doctor.setDepartmentId(departmentId != null && !departmentId.isBlank() ? departmentId : "0");
                 doctorMapper.insert(doctor);
             }
             // patient 无需创建额外记录

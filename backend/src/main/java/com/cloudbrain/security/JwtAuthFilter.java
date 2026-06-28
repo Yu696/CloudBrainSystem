@@ -1,21 +1,28 @@
 package com.cloudbrain.security;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.cloudbrain.entity.Role;
 import com.cloudbrain.entity.User;
+import com.cloudbrain.entity.UserRole;
+import com.cloudbrain.mapper.RoleMapper;
 import com.cloudbrain.mapper.UserMapper;
+import com.cloudbrain.mapper.UserRoleMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -23,6 +30,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserMapper userMapper;
+    private final UserRoleMapper userRoleMapper;
+    private final RoleMapper roleMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -35,8 +44,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String userId = jwtUtil.getUserId(token);
             User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUserId, userId));
             if (user != null && user.getStatus() == 1) {
+                // 查询用户角色并构建 GrantedAuthority 列表
+                List<GrantedAuthority> authorities = new ArrayList<>();
+                List<UserRole> userRoles = userRoleMapper.selectList(
+                        new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
+                for (UserRole ur : userRoles) {
+                    Role role = roleMapper.selectOne(
+                            new LambdaQueryWrapper<Role>().eq(Role::getRoleId, ur.getRoleId()));
+                    if (role != null && role.getRoleCode() != null) {
+                        String authority = role.getRoleCode().toUpperCase();
+                        if (!authority.startsWith("ROLE_")) {
+                            authority = "ROLE_" + authority;
+                        }
+                        authorities.add(new SimpleGrantedAuthority(authority));
+                    }
+                }
+
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(user, null, Collections.emptyList());
+                        new UsernamePasswordAuthenticationToken(user, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 request.setAttribute("currentUserId", userId);
             }

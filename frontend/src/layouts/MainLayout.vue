@@ -146,6 +146,10 @@
               <el-icon><UserFilled /></el-icon>
               <template #title>选择患者</template>
             </el-menu-item>
+            <el-menu-item index="/doctor/ai-tools">
+              <el-icon><MagicStick /></el-icon>
+              <template #title>AI 功能面板</template>
+            </el-menu-item>
           </el-sub-menu>
         </template>
 

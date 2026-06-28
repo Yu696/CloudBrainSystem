@@ -44,7 +44,7 @@ public class AppointmentController extends BaseController {
 
     @Operation(summary = "预约列表")
     @GetMapping("/list")
-    public Result<List<Appointment>> list(@RequestParam(required = false) String patientId,
+    public Result<List<AppointmentVO>> list(@RequestParam(required = false) String patientId,
                                           @RequestParam(required = false) String doctorId) {
         if (patientId != null && !patientId.isEmpty()) {
             return success(appointmentService.listByPatient(patientId));

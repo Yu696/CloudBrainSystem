@@ -231,6 +231,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ai/DiagnosisReportView.vue'),
         meta: { title: '诊断报告' }
       },
+      // 医生端 AI 功能面板
+      {
+        path: 'doctor/ai-tools',
+        name: 'DoctorAiTools',
+        component: () => import('@/views/doctor/DoctorAiToolsView.vue'),
+        meta: { title: 'AI 功能面板' }
+      },
       // M04 AI 辅助诊断 - 管理端
       {
         path: 'admin/ai/prompts',

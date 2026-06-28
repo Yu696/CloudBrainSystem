@@ -195,17 +195,19 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     }
 
     @Override
-    public List<Appointment> listByPatient(String patientId) {
-        return this.list(new LambdaQueryWrapper<Appointment>()
+    public List<AppointmentVO> listByPatient(String patientId) {
+        List<Appointment> list = this.list(new LambdaQueryWrapper<Appointment>()
                 .eq(Appointment::getPatientId, patientId)
                 .orderByDesc(Appointment::getCreateTime));
+        return list.stream().map(this::toVO).collect(Collectors.toList());
     }
 
     @Override
-    public List<Appointment> listByDoctor(String doctorId) {
-        return this.list(new LambdaQueryWrapper<Appointment>()
+    public List<AppointmentVO> listByDoctor(String doctorId) {
+        List<Appointment> list = this.list(new LambdaQueryWrapper<Appointment>()
                 .eq(Appointment::getDoctorId, doctorId)
                 .orderByDesc(Appointment::getCreateTime));
+        return list.stream().map(this::toVO).collect(Collectors.toList());
     }
 
     @Override

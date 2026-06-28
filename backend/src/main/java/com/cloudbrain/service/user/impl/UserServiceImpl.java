@@ -156,7 +156,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setRealName(request.getRealName());
         user.setPhone(request.getPhone());
         user.setEmail(request.getEmail());
-        user.setUserType(request.getUserType() != null ? request.getUserType() : 2);
+        user.setUserType(2);  // 公开注册强制为患者，忽略客户端传入的 userType
         user.setStatus(1);
         save(user);
 

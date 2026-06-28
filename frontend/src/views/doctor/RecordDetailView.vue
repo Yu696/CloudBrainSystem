@@ -158,6 +158,9 @@
           <el-button type="info" plain @click="goExam">
             <el-icon><Search /></el-icon>开检查单
           </el-button>
+          <el-button type="primary" plain @click="goAiDiagnosis">
+            <el-icon><MagicStick /></el-icon>AI 辅助诊断
+          </el-button>
         </div>
       </div>
     </div>
@@ -168,7 +171,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Document, FirstAidKit, Search, Edit, Close, Select, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, FirstAidKit, Search, Edit, Close, Select, Delete, MagicStick } from '@element-plus/icons-vue'
 import { getMedicalRecordDetailApi, updateMedicalRecordApi, listPrescriptionsApi, getPrescriptionDetailApi, listExaminationOrdersApi, deletePrescriptionApi } from '@/api/medical'
 
 const router = useRouter()
@@ -290,6 +293,14 @@ function editExam(order: any) {
 
 function goExam() {
   router.push(`/doctor/exam/${recordId}`)
+}
+
+function goAiDiagnosis() {
+  if (record.value?.patientId) {
+    router.push(`/ai/diagnosis/${record.value.patientId}`)
+  } else {
+    ElMessage.warning('无法获取患者信息')
+  }
 }
 
 function formatDate(dateStr: string): string {

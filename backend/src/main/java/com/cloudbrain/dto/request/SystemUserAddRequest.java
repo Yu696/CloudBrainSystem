@@ -16,4 +16,7 @@ public class SystemUserAddRequest {
 
     @NotBlank(message = "角色不能为空")
     private String roleId;
+
+    /** 科室ID（仅医生角色需要） */
+    private String departmentId;
 }
