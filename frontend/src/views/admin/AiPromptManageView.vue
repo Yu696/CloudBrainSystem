@@ -170,8 +170,9 @@ async function handleDelete(row: any) {
 
 async function toggleStatus(row: any) {
   try {
-    await togglePromptTemplateStatusApi(row.templateId)
-    ElMessage.success(row.status === 1 ? '已禁用' : '已启用')
+    const newStatus = row.status === 1 ? 0 : 1
+    await togglePromptTemplateStatusApi(row.templateId, newStatus)
+    ElMessage.success(newStatus === 1 ? '已启用' : '已禁用')
     loadTemplates()
   } catch { loadTemplates() }
 }

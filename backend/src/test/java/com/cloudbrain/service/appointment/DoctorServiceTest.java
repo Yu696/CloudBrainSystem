@@ -1,7 +1,7 @@
 package com.cloudbrain.service.appointment;
 
 import com.cloudbrain.common.exception.BusinessException;
-import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.dto.response.DoctorVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +20,7 @@ class DoctorServiceTest {
     @Test
     @DisplayName("获取全部可出诊医生")
     void testListAll() {
-        List<Doctor> list = doctorService.listAll();
+        List<DoctorVO> list = doctorService.listAll();
         assertNotNull(list);
         assertTrue(list.size() >= 10);
     }
@@ -28,7 +28,7 @@ class DoctorServiceTest {
     @Test
     @DisplayName("按科室获取医生")
     void testListByDepartment() {
-        List<Doctor> list = doctorService.listByDepartment("DEPT_001");
+        List<DoctorVO> list = doctorService.listByDepartment("DEPT_001");
         assertNotNull(list);
         assertFalse(list.isEmpty());
         list.forEach(doc -> assertEquals("DEPT_001", doc.getDepartmentId()));
@@ -37,7 +37,7 @@ class DoctorServiceTest {
     @Test
     @DisplayName("获取医生详情")
     void testGetDetail() {
-        Doctor doc = doctorService.getDetail("DOC_001");
+        DoctorVO doc = doctorService.getDetail("DOC_001");
         assertNotNull(doc);
         assertEquals("DOC_001", doc.getDoctorId());
     }
