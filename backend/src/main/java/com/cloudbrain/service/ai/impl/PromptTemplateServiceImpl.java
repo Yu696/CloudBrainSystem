@@ -126,14 +126,16 @@ public class PromptTemplateServiceImpl
                     .replace("\"", "\\\"");
             result = result.replace("{{" + entry.getKey() + "}}", safeValue);
         }
-        // 检查是否有未替换的占位符
-        if (result.contains("{{")) {
+        // 清理未被 vars map 覆盖的变量占位符，替换为空字符串
+        Matcher m = Pattern.compile("\\{\\{(.+?)}}").matcher(result);
+        if (m.find()) {
             List<String> unreplaced = new ArrayList<>();
-            Matcher m = Pattern.compile("\\{\\{(.+?)}}").matcher(result);
+            m.reset();
             while (m.find()) {
                 unreplaced.add(m.group(1));
             }
-            log.warn("Prompt 模板存在未替换的变量占位符: {}", unreplaced);
+            log.warn("Prompt 模板存在未替换的变量占位符，已清空: {}", unreplaced);
+            result = result.replaceAll("\\{\\{(.+?)}}", "");
         }
         return result;
     }

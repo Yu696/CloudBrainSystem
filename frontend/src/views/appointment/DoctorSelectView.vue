@@ -168,6 +168,8 @@ const route = useRoute()
 
 const deptId = computed(() => route.query.deptId as string)
 const deptName = computed(() => route.query.deptName as string || '科室')
+const fromTriage = computed(() => route.query.fromTriage === 'true')
+const targetDoctorId = computed(() => route.query.doctorId as string)
 
 const doctors = ref<Doctor[]>([])
 const doctorLoading = ref(false)
@@ -196,6 +198,14 @@ async function loadDoctors() {
   try {
     const res = await listDoctorsApi(deptId.value)
     doctors.value = (res.data as Doctor[]) || []
+
+    // 从智能分诊跳转过来时，自动选中目标医生
+    if (fromTriage.value && targetDoctorId.value) {
+      const target = doctors.value.find(d => d.doctorId === targetDoctorId.value)
+      if (target) {
+        selectedDoctor.value = target
+      }
+    }
   } catch {
     doctors.value = []
   } finally {

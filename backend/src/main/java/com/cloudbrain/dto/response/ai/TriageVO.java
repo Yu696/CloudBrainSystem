@@ -39,6 +39,7 @@ public class TriageVO {
         private String doctorId;
         private String doctorName;
         private String title;
+        private String departmentId;
         private String departmentName;
         private BigDecimal matchScore;
     }
