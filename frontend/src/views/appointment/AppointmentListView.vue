@@ -23,19 +23,13 @@
           <div class="record-doctor">
             <el-avatar :size="44" class="record-avatar">{{ '医' }}</el-avatar>
             <div class="record-doctor-info">
-              <div class="record-doctor-name">医生编号 {{ item.doctorId }}</div>
-              <div class="record-dept-name">科室 {{ item.departmentId }}</div>
+              <div class="record-doctor-name">{{ item.doctorName || '未知医生' }}</div>
+              <div class="record-dept-name">{{ item.departmentName || '未知科室' }}</div>
             </div>
           </div>
           <div class="record-status">
             <el-tag :type="statusTag(item.status)" effect="dark" size="small">
               {{ statusText(item.status) }}
-            </el-tag>
-            <el-tag v-if="item.paymentStatus === 1" type="success" effect="plain" size="small" style="margin-left: 4px">
-              已支付
-            </el-tag>
-            <el-tag v-else-if="item.status === 0" type="danger" effect="plain" size="small" style="margin-left: 4px">
-              未支付
             </el-tag>
           </div>
         </div>
