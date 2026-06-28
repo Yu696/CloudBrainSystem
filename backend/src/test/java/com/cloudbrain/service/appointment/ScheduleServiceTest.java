@@ -45,9 +45,10 @@ class ScheduleServiceTest {
         assertNotNull(schedule);
         assertNotNull(schedule.getScheduleId());
         assertEquals(DOCTOR_ID, schedule.getDoctorId());
-        assertEquals(20, schedule.getAvailableSlots());
+        // 8:00-12:00, 30分钟/个, 共8个时段
+        assertEquals(8, schedule.getAvailableSlots());
 
-        // 验证时段自动生成：8:00-12:00, 30分钟/个, 共8个时段
+        // 验证时段自动生成
         List<TimeSlot> slots = scheduleService.getAvailableSlots(DOCTOR_ID, LocalDate.now().plusDays(1));
         assertEquals(8, slots.size());
         slots.forEach(s -> assertEquals(0, s.getStatus()));
@@ -101,6 +102,16 @@ class ScheduleServiceTest {
         List<TimeSlot> slots = scheduleService.getAvailableSlots("DOC_001", LocalDate.now().plusDays(30));
         assertNotNull(slots);
         assertTrue(slots.isEmpty());
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("时段长度不能少于5分钟")
+    void testSlotDurationMin5() {
+        ScheduleCreateRequest request = buildRequest(DOCTOR_ID, LocalDate.now().plusDays(5), 0);
+        request.setSlotDuration(3);
+
+        assertThrows(Exception.class, () -> scheduleService.create(request));
     }
 
     private ScheduleCreateRequest buildRequest(String doctorId, LocalDate date, int shift) {

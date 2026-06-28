@@ -43,7 +43,7 @@
                 />
               </el-form-item>
               <el-form-item label="班次" prop="workShift">
-                <el-radio-group v-model="form.workShift">
+                <el-radio-group v-model="form.workShift" @change="handleShiftChange">
                   <el-radio-button :value="0">上午</el-radio-button>
                   <el-radio-button :value="1">下午</el-radio-button>
                   <el-radio-button :value="2">晚班</el-radio-button>
@@ -55,6 +55,7 @@
                   placeholder="开始时间"
                   format="HH:mm"
                   value-format="HH:mm:ss"
+                  :disabled-hours="disabledStartHours"
                   style="width: 100%"
                 />
               </el-form-item>
@@ -64,11 +65,20 @@
                   placeholder="结束时间"
                   format="HH:mm"
                   value-format="HH:mm:ss"
+                  :disabled-hours="disabledEndHours"
+                  :disabled-minutes="disabledEndMinutes"
                   style="width: 100%"
                 />
               </el-form-item>
               <el-form-item label="时段长度">
-                <el-input-number v-model="form.slotDuration" :min="15" :max="1440" :step="15" /> 分钟
+                <el-input-number
+                  v-model="form.slotDuration"
+                  :min="5"
+                  :max="maxSlotDuration"
+                  :step="5"
+                  :disabled="!form.startTime || !form.endTime"
+                /> 分钟
+                <span class="calc-hint">（最少 5 分钟，最多 {{ maxSlotDuration }} 分钟）</span>
               </el-form-item>
               <el-form-item label="最大人数">
                 <el-input-number :model-value="maxPatients" disabled :min="1" :max="999" /> 人
@@ -115,22 +125,24 @@
               stripe
               class="cb-table"
               height="400"
+              style="width: 100%"
             >
-              <el-table-column prop="scheduleDate" label="日期" width="110" />
-              <el-table-column label="班次" width="70">
+              <el-table-column prop="scheduleDate" label="日期" width="100" />
+              <el-table-column label="班次" width="65">
                 <template #default="{ row }">
                   <el-tag :type="shiftTag(row.workShift)" size="small">
                     {{ shiftLabel(row.workShift) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="时间" width="130">
+              <el-table-column label="时间" min-width="120">
                 <template #default="{ row }">
                   {{ row.startTime }} - {{ row.endTime }}
                 </template>
               </el-table-column>
-              <el-table-column prop="availableSlots" label="余号" width="60" align="center" />
-              <el-table-column prop="status" label="状态" width="70">
+              <el-table-column prop="slotDuration" label="时段长度" width="75" align="center" />
+              <el-table-column prop="availableSlots" label="余号" width="65" align="center" />
+              <el-table-column prop="status" label="状态" width="65">
                 <template #default="{ row }">
                   <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
                     {{ row.status === 1 ? '启用' : '停用' }}
@@ -182,6 +194,13 @@ interface Schedule {
   status: number
 }
 
+// 各班次的默认时间范围
+const SHIFT_DEFAULTS: Record<number, { start: string; end: string; label: string }> = {
+  0: { start: '08:00:00', end: '12:00:00', label: '上午' },
+  1: { start: '14:00:00', end: '17:00:00', label: '下午' },
+  2: { start: '18:00:00', end: '21:00:00', label: '晚班' }
+}
+
 const formRef = ref<FormInstance>()
 const saveLoading = ref(false)
 const queryLoading = ref(false)
@@ -192,14 +211,78 @@ const form = reactive({
   doctorId: '',
   scheduleDate: '',
   workShift: 0,
-  startTime: '',
-  endTime: '',
+  startTime: '08:00:00',
+  endTime: '12:00:00',
   slotDuration: 30,
   maxPatients: 20,
   remark: ''
 })
 
-// 总分钟数（结束时间 - 开始时间）
+// 获取当前班次的小时范围 [minHour, maxHour]
+function getShiftHourRange(shift: number): [number, number] {
+  switch (shift) {
+    case 0: return [8, 12]    // 上午 08:00-12:00
+    case 1: return [14, 17]   // 下午 14:00-17:00
+    case 2: return [18, 21]   // 晚班 18:00-21:00
+    default: return [0, 23]
+  }
+}
+
+// 班次小时范围（响应式）
+const shiftHourRange = computed(() => getShiftHourRange(form.workShift))
+
+// 开始时间禁用的小时（班次范围外不可选）
+const disabledStartHours = computed(() => {
+  return () => {
+    const [min, max] = shiftHourRange.value
+    return Array.from({ length: 24 }, (_, i) => i).filter(h => h < min || h >= max)
+  }
+})
+
+// 结束时间禁用的小时（班次范围外不可选）
+const disabledEndHours = computed(() => {
+  return () => {
+    const [min, max] = shiftHourRange.value
+    return Array.from({ length: 24 }, (_, i) => i).filter(h => h < min || h > max)
+  }
+})
+
+// 结束时间禁用的分钟（防止结束小于开始 + 班次边界分钟限制）
+const disabledEndMinutes = computed(() => {
+  return (hour: number) => {
+    if (!form.startTime) return []
+    const [sh, sm] = form.startTime.split(':').map(Number)
+    const [, maxHour] = shiftHourRange.value
+
+    const disabled: Set<number> = new Set()
+
+    // hour < 开始小时：整个小时禁用
+    if (hour < sh) return Array.from({ length: 60 }, (_, i) => i)
+
+    // hour === 开始小时：禁用 ≤ 开始分钟的分钟
+    if (hour === sh) {
+      for (let m = 0; m <= sm; m++) disabled.add(m)
+    }
+
+    // hour === 班次最大小时：只允许 :00
+    if (hour === maxHour) {
+      for (let m = 1; m < 60; m++) disabled.add(m)
+    }
+
+    return Array.from(disabled)
+  }
+})
+
+// 班次切换时自动填充默认时间
+function handleShiftChange(shift: number) {
+  const def = SHIFT_DEFAULTS[shift]
+  if (def) {
+    form.startTime = def.start
+    form.endTime = def.end
+  }
+}
+
+// 总分钟数
 const totalMinutes = computed(() => {
   if (!form.startTime || !form.endTime) return 0
   const [sh, sm] = form.startTime.split(':').map(Number)
@@ -207,17 +290,22 @@ const totalMinutes = computed(() => {
   return Math.max(0, (eh * 60 + em) - (sh * 60 + sm))
 })
 
-// 最大人数 = 总分钟 ÷ 时段长度（只读展示）
+// 时段长度最大值
+const maxSlotDuration = computed(() => {
+  return Math.max(totalMinutes.value, 5)
+})
+
+// 最大人数 = 总分钟 ÷ 时段长度
 const maxPatients = computed(() => {
   if (!totalMinutes.value || !form.slotDuration) return 0
   return Math.floor(totalMinutes.value / form.slotDuration)
 })
 
-// startTime/endTime 变化时，slotDuration 默认设为总时长
+// startTime/endTime 变化时，如果 slotDuration 超过新的总时长则自动回调
 watch(
   [() => form.startTime, () => form.endTime],
   () => {
-    if (totalMinutes.value > 0) {
+    if (totalMinutes.value > 0 && form.slotDuration > totalMinutes.value) {
       form.slotDuration = totalMinutes.value
     }
   }
@@ -229,7 +317,26 @@ const rules: FormRules = {
   scheduleDate: [{ required: true, message: '请选择排班日期', trigger: 'change' }],
   workShift: [{ required: true, message: '请选择班次', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-  endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
+  endTime: [
+    { required: true, message: '请选择结束时间', trigger: 'change' },
+    {
+      validator: (_rule: any, value: string, callback: any) => {
+        if (form.startTime && value) {
+          const [sh, sm] = form.startTime.split(':').map(Number)
+          const [eh, em] = value.split(':').map(Number)
+          const startMin = sh * 60 + sm
+          const endMin = eh * 60 + em
+          if (eh < sh || (eh === sh && em <= sm)) {
+            callback(new Error('结束时间必须晚于开始时间'))
+          } else if (endMin - startMin < 5) {
+            callback(new Error('结束时间与开始时间至少相差 5 分钟'))
+          }
+        }
+        callback()
+      },
+      trigger: 'change'
+    }
+  ]
 }
 
 // Query state
@@ -239,6 +346,22 @@ const departments = ref<Department[]>([])
 const allDoctors = ref<Doctor[]>([])
 const filteredDoctors = ref<Doctor[]>([])
 const schedules = ref<Schedule[]>([])
+
+async function handleQuery() {
+  if (!queryDoctorId.value) {
+    ElMessage.warning('请先选择医生')
+    return
+  }
+  queryLoading.value = true
+  try {
+    const res = await queryScheduleApi(queryDoctorId.value)
+    schedules.value = (res.data as Schedule[]) || []
+  } catch {
+    schedules.value = []
+  } finally {
+    queryLoading.value = false
+  }
+}
 
 onMounted(async () => {
   await Promise.all([loadDepartments(), loadAllDoctors()])
@@ -312,23 +435,8 @@ function resetForm() {
   form.maxPatients = 20
   form.remark = ''
   filteredDoctors.value = []
-}
-
-async function handleQuery() {
-  if (!queryDoctorId.value) {
-    ElMessage.warning('请选择医生')
-    return
-  }
-
-  queryLoading.value = true
-  try {
-    const res = await queryScheduleApi(queryDoctorId.value)
-    schedules.value = (res.data as Schedule[]) || []
-  } catch {
-    schedules.value = []
-  } finally {
-    queryLoading.value = false
-  }
+  // 恢复上午默认时间
+  handleShiftChange(0)
 }
 </script>
 
