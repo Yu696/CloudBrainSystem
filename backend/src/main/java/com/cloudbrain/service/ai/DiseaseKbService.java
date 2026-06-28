@@ -12,6 +12,9 @@ public interface DiseaseKbService {
     /** 关键词搜索疾病（按疾病名称模糊匹配） */
     List<DiseaseKnowledge> search(String keyword);
 
+    /** 关键词搜索疾病（同时匹配疾病名称和症状字段） */
+    List<DiseaseKnowledge> searchByKeyword(String keyword);
+
     /** 查询所有启用的疾病条目 */
     List<DiseaseKnowledge> listAll();
 

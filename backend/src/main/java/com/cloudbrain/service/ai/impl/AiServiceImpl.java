@@ -14,6 +14,7 @@ import com.cloudbrain.dto.response.ai.*;
 import com.cloudbrain.entity.*;
 import com.cloudbrain.mapper.*;
 import com.cloudbrain.service.ai.AiService;
+import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PatientContextBuilder;
 import com.cloudbrain.service.ai.PromptTemplateService;
 import com.cloudbrain.util.UUIDUtil;
@@ -50,6 +51,7 @@ public class AiServiceImpl implements AiService {
 
     private final PatientContextBuilder patientContextBuilder;
     private final PromptTemplateService promptTemplateService;
+    private final DiseaseKbService diseaseKbService;
     private final AiConfig aiConfig;
     private final RestTemplate aiRestTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -127,8 +129,12 @@ public class AiServiceImpl implements AiService {
             }
 
             PatientContext ctx = patientContextBuilder.build(request.getPatientId());
+
+            // 查询疾病知识库，获取相关疾病参考信息
+            String diseaseKnowledgeRef = buildDiseaseKnowledgeRef(request);
+
             List<PromptTemplate> templates = promptTemplateService.listByType(1); // type=1=诊断
-            String prompt = renderDiagnosisPrompt(templates, request, ctx);
+            String prompt = renderDiagnosisPrompt(templates, request, ctx, diseaseKnowledgeRef);
 
             String rawResponse = callAiApiWithRetry(prompt);
             log.info("AI 诊断原始返回: {}", rawResponse);
@@ -285,7 +291,8 @@ public class AiServiceImpl implements AiService {
         return promptTemplateService.render(template, vars);
     }
 
-    private String renderDiagnosisPrompt(List<PromptTemplate> templates, DiagnosisRequest request, PatientContext ctx) {
+    private String renderDiagnosisPrompt(List<PromptTemplate> templates, DiagnosisRequest request,
+                                          PatientContext ctx, String diseaseKnowledgeRef) {
         String template = findTemplateOrDefault(templates, null,
                 "你是一位资深临床医生。请根据以下患者信息进行诊断分析。\n" +
                 "请严格以 JSON 格式返回结果。\n\n" +
@@ -294,7 +301,8 @@ public class AiServiceImpl implements AiService {
                 "患者年龄：{{age}}，性别：{{gender}}\n" +
                 "过敏史：{{allergy_history}}\n既往病史：{{medical_history}}\n当前用药：{{current_medications}}\n" +
                 "体格检查：{{physical_exam}}\n辅助检查：{{auxiliary_exam}}\n\n" +
-                "请返回 JSON：{ \"diseaseMatches\":[{\"diseaseName\":\"\",\"icdCode\":\"\",\"confidence\":0.0," +
+                "{{disease_knowledge_ref}}" +
+                "\n请返回 JSON：{ \"diseaseMatches\":[{\"diseaseName\":\"\",\"icdCode\":\"\",\"confidence\":0.0," +
                 "\"diagnosisBasis\":\"\",\"differentialDiagnosis\":[]}], " +
                 "\"departmentRecommendations\":[{\"departmentName\":\"\",\"confidence\":0.0}], " +
                 "\"confidenceScore\":0.0, \"analysisResult\":\"\" }");
@@ -315,8 +323,87 @@ public class AiServiceImpl implements AiService {
                 ? String.valueOf(symptomData.getOrDefault("physicalExam", "")) : ""));
         vars.put("auxiliary_exam", sanitizeInput(symptomData != null
                 ? String.valueOf(symptomData.getOrDefault("auxiliaryExam", "")) : ""));
+        vars.put("disease_knowledge_ref", diseaseKnowledgeRef);
 
         return promptTemplateService.render(template, vars);
+    }
+
+    // ==================== 疾病知识库查询 ====================
+
+    /** 从症状数据中提取关键词，查询疾病知识库，构建参考信息 */
+    private String buildDiseaseKnowledgeRef(DiagnosisRequest request) {
+        Map<String, Object> symptomData = request.getSymptomData();
+        if (symptomData == null || symptomData.isEmpty()) return "";
+
+        String chiefComplaint = String.valueOf(symptomData.getOrDefault("chiefComplaint", ""));
+        String presentIllness = String.valueOf(symptomData.getOrDefault("presentIllness", ""));
+        String combined = (chiefComplaint + " " + presentIllness).trim();
+        if (combined.isBlank() || "null".equals(combined)) return "";
+
+        Set<String> keywords = extractKeywords(combined);
+        if (keywords.isEmpty()) return "";
+
+        // 搜索每个关键词，去重收集匹配的疾病
+        Set<String> dedupIds = new LinkedHashSet<>();
+        List<DiseaseKnowledge> matches = new ArrayList<>();
+        for (String keyword : keywords) {
+            if (keyword.length() < 2) continue;
+            List<DiseaseKnowledge> results = diseaseKbService.searchByKeyword(keyword);
+            for (DiseaseKnowledge dk : results) {
+                if (dk.getStatus() != null && dk.getStatus() != 1) continue;
+                if (dedupIds.add(dk.getDiseaseId())) {
+                    matches.add(dk);
+                    if (matches.size() >= 5) break;
+                }
+            }
+            if (matches.size() >= 5) break;
+        }
+
+        if (matches.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("参考以下院内疾病知识库信息（供诊断参考）：\n");
+        for (DiseaseKnowledge dk : matches) {
+            sb.append("---\n");
+            sb.append("疾病：").append(dk.getDiseaseName());
+            if (dk.getIcdCode() != null && !dk.getIcdCode().isBlank()) {
+                sb.append("（ICD-10: ").append(dk.getIcdCode()).append("）");
+            }
+            sb.append("\n");
+            if (dk.getSymptoms() != null && !dk.getSymptoms().isBlank()) {
+                String sym = dk.getSymptoms().replaceAll("[\\[\\]\"]", "");
+                sb.append("典型症状：").append(sym).append("\n");
+            }
+            if (dk.getDiagnosisBasis() != null && !dk.getDiagnosisBasis().isBlank()) {
+                sb.append("诊断依据：").append(dk.getDiagnosisBasis()).append("\n");
+            }
+            if (dk.getTreatmentPlan() != null && !dk.getTreatmentPlan().isBlank()) {
+                sb.append("治疗方案：").append(dk.getTreatmentPlan()).append("\n");
+            }
+            if (dk.getSimilarityDiseases() != null && !dk.getSimilarityDiseases().isBlank()) {
+                sb.append("需鉴别：").append(dk.getSimilarityDiseases()).append("\n");
+            }
+        }
+        sb.append("---\n以上知识库信息仅供参考，请结合患者实际情况综合诊断。");
+        return sb.toString().trim();
+    }
+
+    /** 从文本中提取有意义的搜索关键词 */
+    private Set<String> extractKeywords(String text) {
+        Set<String> keywords = new LinkedHashSet<>();
+        // 按中文/英文标点和空格分割
+        String[] parts = text.split("[,，;；、。.\\s]+");
+        for (String part : parts) {
+            part = part.trim();
+            if (part.length() >= 2 && !part.matches("\\d+")) {
+                keywords.add(part);
+            }
+        }
+        // 如果全文长度适中，也作为完整关键词搜索
+        if (text.length() <= 50 && text.length() >= 2) {
+            keywords.add(text.trim());
+        }
+        return keywords;
     }
 
     private String renderPrescriptionCheckPrompt(List<PromptTemplate> templates,
