@@ -41,7 +41,7 @@
           </svg>
         </div>
         <div class="stat-body">
-          <div class="stat-value">{{ stats.avgResponseTimeMs || 0 }}ms</div>
+          <div class="stat-value">{{ avgResponseTimeMs }}ms</div>
           <div class="stat-label">平均响应</div>
         </div>
       </div>
@@ -147,6 +147,7 @@ const logsLoading = ref(false)
 const stats = ref<any>({})
 const logs = ref<any[]>([])
 const logTotal = ref(0)
+const avgResponseTimeMs = ref(0)
 
 const logFilter = reactive({
   type: undefined as number | undefined,
@@ -241,9 +242,18 @@ async function loadLogs() {
       endDate: end || undefined
     })
     const data = res.data as any
-    logs.value = data.records || []
+    const records = data.records || []
+    logs.value = records
     logTotal.value = data.total || 0
-  } catch { logs.value = []; logTotal.value = 0 }
+
+    // 前端计算平均响应时长
+    if (records.length > 0) {
+      const total = records.reduce((sum: number, r: any) => sum + (Number(r.responseTimeMs) || 0), 0)
+      avgResponseTimeMs.value = Math.round(total / records.length)
+    } else {
+      avgResponseTimeMs.value = 0
+    }
+  } catch { logs.value = []; logTotal.value = 0; avgResponseTimeMs.value = 0 }
   finally { logsLoading.value = false }
 }
 </script>
