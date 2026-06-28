@@ -7,7 +7,7 @@ spring:
 
   # MySQL 数据源
   datasource:
-    url: jdbc:mysql://localhost:3306/cloudbrain?serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://192.168.110.128:3306/cloudbrain?serverTimezone=Asia/Shanghai
     username: root
     password: root123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -51,3 +51,22 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# AI 服务配置
+ai:
+  provider: deepseek
+  api-key: ${AI_API_KEY}
+  api-url: https://api.deepseek.com/v1/chat/completions
+  model: deepseek-chat
+  timeout: 30000
+  connect-timeout: 3000
+  fallback:
+    enabled: true
+  retry:
+    max-attempts: 2
+  rate-limit:
+    enabled: true
+    max-per-minute: 10
+    max-per-day: 100
+  mock:
+    enabled: ${AI_MOCK_ENABLED:false}

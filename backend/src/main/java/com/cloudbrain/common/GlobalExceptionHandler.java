@@ -1,5 +1,8 @@
 package com.cloudbrain.common;
 
+import com.cloudbrain.common.exception.AiResponseException;
+import com.cloudbrain.common.exception.AiTimeoutException;
+import com.cloudbrain.common.exception.AiUnavailableException;
 import com.cloudbrain.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -54,6 +57,30 @@ public class GlobalExceptionHandler {
         FieldError fieldError = e.getBindingResult().getFieldError();
         String msg = fieldError != null ? fieldError.getDefaultMessage() : "参数校验失败";
         return Result.fail(msg);
+    }
+
+    /** AI 调用超时 */
+    @ExceptionHandler(AiTimeoutException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Result<?> handleAiTimeout(AiTimeoutException e) {
+        log.error("AI 调用超时: {}", e.getMessage());
+        return Result.serverError("AI 服务响应超时，已为您提供备用方案");
+    }
+
+    /** AI 服务不可达 */
+    @ExceptionHandler(AiUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Result<?> handleAiUnavailable(AiUnavailableException e) {
+        log.error("AI 服务不可用: {}", e.getMessage());
+        return Result.serverError("AI 服务暂时不可用，已为您提供备用方案");
+    }
+
+    /** AI 响应格式异常 */
+    @ExceptionHandler(AiResponseException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Result<?> handleAiResponse(AiResponseException e) {
+        log.error("AI 响应异常: {}", e.getMessage());
+        return Result.serverError("AI 服务响应异常，已为您提供备用方案");
     }
 
     /** 运行时异常 */

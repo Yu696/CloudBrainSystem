@@ -1,6 +1,9 @@
 package com.cloudbrain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.cloudbrain.common.serializer.JsonArrayOrStringDeserializer;
+import com.fasterxml.jackson.annotation.JsonRawValue;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -28,6 +31,8 @@ public class DiseaseKnowledge {
     @TableField("related_department_id")
     private String relatedDepartmentId;
 
+    @JsonRawValue
+    @JsonDeserialize(using = JsonArrayOrStringDeserializer.class)
     private String symptoms;
 
     @TableField("risk_factors")

@@ -106,8 +106,8 @@ export function deletePromptTemplateApi(templateId: string) {
 }
 
 /** 启用/禁用模板 */
-export function togglePromptTemplateStatusApi(templateId: string) {
-  return request.put<any>(`/ai/prompt-template/${templateId}/status`)
+export function togglePromptTemplateStatusApi(templateId: string, status: number) {
+  return request.put<any>(`/ai/prompt-template/${templateId}/status`, { status })
 }
 
 // ---- 疾病知识库管理（AI-15） ----

@@ -1,9 +1,13 @@
 package com.cloudbrain.controller.ai;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
-import com.cloudbrain.entity.DiseaseKnowledge;
-import com.cloudbrain.entity.PromptTemplate;
+import com.cloudbrain.entity.*;
+import com.cloudbrain.mapper.DiagnosisResultMapper;
+import com.cloudbrain.mapper.GenerationLogMapper;
+import com.cloudbrain.mapper.TriageLogMapper;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,12 +16,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * AI 管理端 Controller
- * 负责 Prompt 模板管理 + 疾病知识库管理（P2 优先级）
+ * 负责 Prompt 模板管理 + 疾病知识库管理（P2 优先级）+ AI 调用监控
  *
  * @author 刘鹏杰
  */
@@ -29,6 +37,9 @@ public class AiAdminController extends BaseController {
 
     private final PromptTemplateService promptTemplateService;
     private final DiseaseKbService diseaseKbService;
+    private final TriageLogMapper triageLogMapper;
+    private final DiagnosisResultMapper diagnosisResultMapper;
+    private final GenerationLogMapper generationLogMapper;
 
     // ==================== Prompt 模板管理（5 个 API） ====================
 
@@ -102,8 +113,150 @@ public class AiAdminController extends BaseController {
         return success("删除成功");
     }
 
-    // ==================== AI 调用监控（预留，依赖余润东的 AiService） ====================
+    // ==================== AI 调用监控（2 个 API） ====================
 
-    // TODO: GET /api/ai/monitor/stats — AI 调用统计概览（待 AiService 完成后对接）
-    // TODO: GET /api/ai/monitor/logs  — AI 调用明细列表（待 AiService 完成后对接）
+    @Operation(summary = "AI 调用统计概览")
+    @GetMapping("/monitor/stats")
+    public Result<Map<String, Object>> getMonitorStats(
+            @Parameter(description = "开始日期（yyyy-MM-dd）") @RequestParam(required = false) String startDate,
+            @Parameter(description = "结束日期（yyyy-MM-dd）") @RequestParam(required = false) String endDate) {
+
+        LocalDateTime start = startDate != null ? LocalDate.parse(startDate).atStartOfDay() : null;
+        LocalDateTime end = endDate != null ? LocalDate.parse(endDate).atTime(LocalTime.MAX) : null;
+
+        long triageTotal = countTriage(start, end);
+        long diagnosisTotal = countDiagnosis(start, end);
+        long generationTotal = countGeneration(start, end);
+
+        long triageSuccess = countTriageSuccess(start, end);
+        long diagnosisSuccess = countDiagnosisSuccess(start, end);
+        long generationSuccess = countGenerationSuccess(start, end);
+
+        long totalCalls = triageTotal + diagnosisTotal + generationTotal;
+        long successCalls = triageSuccess + diagnosisSuccess + generationSuccess;
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("totalCalls", totalCalls);
+        stats.put("successCalls", successCalls);
+        stats.put("failCalls", totalCalls - successCalls);
+        stats.put("successRate", totalCalls > 0
+                ? Math.round(successCalls * 10000.0 / totalCalls) / 100.0 : 0);
+
+        Map<String, Object> byType = new LinkedHashMap<>();
+        byType.put("triage", Map.of("total", triageTotal, "success", triageSuccess));
+        byType.put("diagnosis", Map.of("total", diagnosisTotal, "success", diagnosisSuccess));
+        byType.put("generation", Map.of("total", generationTotal, "success", generationSuccess));
+        stats.put("byType", byType);
+
+        return success(stats);
+    }
+
+    @Operation(summary = "AI 调用明细列表")
+    @GetMapping("/monitor/logs")
+    public Result<Map<String, Object>> getMonitorLogs(
+            @Parameter(description = "日志类型：0=分诊 1=诊断 2=处方审核 3=病历生成") @RequestParam(required = false) Integer type,
+            @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") int pageSize,
+            @Parameter(description = "开始日期（yyyy-MM-dd）") @RequestParam(required = false) String startDate,
+            @Parameter(description = "结束日期（yyyy-MM-dd）") @RequestParam(required = false) String endDate) {
+
+        LocalDateTime start = startDate != null ? LocalDate.parse(startDate).atStartOfDay() : null;
+        LocalDateTime end = endDate != null ? LocalDate.parse(endDate).atTime(LocalTime.MAX) : null;
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("page", page);
+        result.put("pageSize", pageSize);
+
+        if (type == null) {
+            result.put("total", 0);
+            result.put("records", List.of());
+            return success(result);
+        }
+
+        switch (type) {
+            case 0 -> {
+                Page<TriageLog> mpPage = new Page<>(page, pageSize);
+                LambdaQueryWrapper<TriageLog> w = new LambdaQueryWrapper<>();
+                if (start != null) w.ge(TriageLog::getCreateTime, start);
+                if (end != null) w.le(TriageLog::getCreateTime, end);
+                w.orderByDesc(TriageLog::getCreateTime);
+                Page<TriageLog> pageResult = triageLogMapper.selectPage(mpPage, w);
+                result.put("total", pageResult.getTotal());
+                result.put("records", pageResult.getRecords());
+            }
+            case 1 -> {
+                Page<DiagnosisResult> mpPage = new Page<>(page, pageSize);
+                LambdaQueryWrapper<DiagnosisResult> w = new LambdaQueryWrapper<>();
+                if (start != null) w.ge(DiagnosisResult::getCreateTime, start);
+                if (end != null) w.le(DiagnosisResult::getCreateTime, end);
+                w.orderByDesc(DiagnosisResult::getCreateTime);
+                Page<DiagnosisResult> pageResult = diagnosisResultMapper.selectPage(mpPage, w);
+                result.put("total", pageResult.getTotal());
+                result.put("records", pageResult.getRecords());
+            }
+            case 2, 3 -> {
+                Page<GenerationLog> mpPage = new Page<>(page, pageSize);
+                LambdaQueryWrapper<GenerationLog> w = new LambdaQueryWrapper<>();
+                if (start != null) w.ge(GenerationLog::getCreateTime, start);
+                if (end != null) w.le(GenerationLog::getCreateTime, end);
+                w.orderByDesc(GenerationLog::getCreateTime);
+                Page<GenerationLog> pageResult = generationLogMapper.selectPage(mpPage, w);
+                result.put("total", pageResult.getTotal());
+                result.put("records", pageResult.getRecords());
+            }
+            default -> {
+                result.put("total", 0);
+                result.put("records", List.of());
+            }
+        }
+
+        return success(result);
+    }
+
+    // ==================== 监控辅助方法 ====================
+
+    private long countTriage(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<TriageLog> w = new LambdaQueryWrapper<>();
+        if (start != null) w.ge(TriageLog::getCreateTime, start);
+        if (end != null) w.le(TriageLog::getCreateTime, end);
+        return triageLogMapper.selectCount(w);
+    }
+
+    private long countDiagnosis(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<DiagnosisResult> w = new LambdaQueryWrapper<>();
+        if (start != null) w.ge(DiagnosisResult::getCreateTime, start);
+        if (end != null) w.le(DiagnosisResult::getCreateTime, end);
+        return diagnosisResultMapper.selectCount(w);
+    }
+
+    private long countGeneration(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<GenerationLog> w = new LambdaQueryWrapper<>();
+        if (start != null) w.ge(GenerationLog::getCreateTime, start);
+        if (end != null) w.le(GenerationLog::getCreateTime, end);
+        return generationLogMapper.selectCount(w);
+    }
+
+    private long countTriageSuccess(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<TriageLog> w = new LambdaQueryWrapper<>();
+        w.eq(TriageLog::getStatus, 1);
+        if (start != null) w.ge(TriageLog::getCreateTime, start);
+        if (end != null) w.le(TriageLog::getCreateTime, end);
+        return triageLogMapper.selectCount(w);
+    }
+
+    private long countDiagnosisSuccess(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<DiagnosisResult> w = new LambdaQueryWrapper<>();
+        w.eq(DiagnosisResult::getStatus, 1);
+        if (start != null) w.ge(DiagnosisResult::getCreateTime, start);
+        if (end != null) w.le(DiagnosisResult::getCreateTime, end);
+        return diagnosisResultMapper.selectCount(w);
+    }
+
+    private long countGenerationSuccess(LocalDateTime start, LocalDateTime end) {
+        LambdaQueryWrapper<GenerationLog> w = new LambdaQueryWrapper<>();
+        w.eq(GenerationLog::getStatus, 1);
+        if (start != null) w.ge(GenerationLog::getCreateTime, start);
+        if (end != null) w.le(GenerationLog::getCreateTime, end);
+        return generationLogMapper.selectCount(w);
+    }
 }
