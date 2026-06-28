@@ -34,6 +34,20 @@ public class DiseaseKbServiceImpl
     }
 
     @Override
+    public List<DiseaseKnowledge> searchByKeyword(String keyword) {
+        if (keyword == null || keyword.isEmpty()) {
+            return List.of();
+        }
+        LambdaQueryWrapper<DiseaseKnowledge> wrapper = new LambdaQueryWrapper<DiseaseKnowledge>()
+                .eq(DiseaseKnowledge::getStatus, 1)
+                .and(w -> w.like(DiseaseKnowledge::getDiseaseName, keyword)
+                        .or()
+                        .like(DiseaseKnowledge::getSymptoms, keyword))
+                .orderByDesc(DiseaseKnowledge::getCreateTime);
+        return this.list(wrapper);
+    }
+
+    @Override
     public List<DiseaseKnowledge> listAll() {
         return this.list(new LambdaQueryWrapper<DiseaseKnowledge>()
                 .eq(DiseaseKnowledge::getStatus, 1)

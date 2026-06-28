@@ -137,16 +137,6 @@
             </el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="ai-tools">
-            <template #title>
-              <el-icon><MagicStick /></el-icon>
-              <span>AI 辅助工具</span>
-            </template>
-            <el-menu-item index="/patient/list">
-              <el-icon><UserFilled /></el-icon>
-              <template #title>选择患者</template>
-            </el-menu-item>
-          </el-sub-menu>
         </template>
 
         <!-- ===== 患者菜单 ===== -->
