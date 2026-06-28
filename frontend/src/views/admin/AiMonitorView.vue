@@ -29,7 +29,7 @@
           </svg>
         </div>
         <div class="stat-body">
-          <div class="stat-value">{{ (stats.successRate * 100).toFixed(1) }}%</div>
+          <div class="stat-value">{{ stats.successRate }}%</div>
           <div class="stat-label">成功率</div>
         </div>
       </div>
@@ -41,7 +41,7 @@
           </svg>
         </div>
         <div class="stat-body">
-          <div class="stat-value">{{ stats.avgResponseTimeMs || 0 }}ms</div>
+          <div class="stat-value">{{ avgResponseTimeMs }}ms</div>
           <div class="stat-label">平均响应</div>
         </div>
       </div>
@@ -107,19 +107,20 @@
             <el-option label="分诊" :value="0" />
             <el-option label="诊断" :value="1" />
             <el-option label="处方审核" :value="2" />
-            <el-option label="病历生成" :value="3" />
           </el-select>
         </div>
       </div>
       <el-table :data="logs" v-loading="logsLoading" stripe style="width:100%">
-        <el-table-column prop="logId" label="ID" width="180" show-overflow-tooltip />
+        <el-table-column prop="callId" label="ID" width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="100">
-          <template #default="{ row }"><el-tag size="small">{{ row.typeName }}</el-tag></template>
+          <template #default="{ row }"><el-tag size="small">{{ getTypeName(row.callType) }}</el-tag></template>
         </el-table-column>
-        <el-table-column prop="userName" label="用户" width="120" />
-        <el-table-column label="状态" width="90">
+        <el-table-column label="用户" width="130">
+          <template #default="{ row }">{{ getUserDisplay(row) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">{{ row.statusName }}</el-tag>
+            <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">{{ getStatusName(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="responseTimeMs" label="响应时间" width="100">
@@ -146,6 +147,7 @@ const logsLoading = ref(false)
 const stats = ref<any>({})
 const logs = ref<any[]>([])
 const logTotal = ref(0)
+const avgResponseTimeMs = ref(0)
 
 const logFilter = reactive({
   type: undefined as number | undefined,
@@ -194,6 +196,19 @@ function formatDailyDate(dateStr: string) {
   return dateStr?.slice(5) || ''
 }
 
+function getTypeName(callType: number) {
+  const map: Record<number, string> = { 0: '智能分诊', 1: '诊断分析', 2: '处方审核' }
+  return map[callType] || '未知'
+}
+
+function getStatusName(status: number) {
+  return status === 1 ? '成功' : '失败'
+}
+
+function getUserDisplay(row: any) {
+  return row.patientId || row.doctorId || '-'
+}
+
 onMounted(() => {
   const now = new Date()
   const start = new Date(now.getTime() - 7 * 86400000)
@@ -227,9 +242,18 @@ async function loadLogs() {
       endDate: end || undefined
     })
     const data = res.data as any
-    logs.value = data.records || []
+    const records = data.records || []
+    logs.value = records
     logTotal.value = data.total || 0
-  } catch { logs.value = []; logTotal.value = 0 }
+
+    // 前端计算平均响应时长
+    if (records.length > 0) {
+      const total = records.reduce((sum: number, r: any) => sum + (Number(r.responseTimeMs) || 0), 0)
+      avgResponseTimeMs.value = Math.round(total / records.length)
+    } else {
+      avgResponseTimeMs.value = 0
+    }
+  } catch { logs.value = []; logTotal.value = 0; avgResponseTimeMs.value = 0 }
   finally { logsLoading.value = false }
 }
 </script>
