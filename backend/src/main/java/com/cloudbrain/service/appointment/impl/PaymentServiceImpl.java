@@ -34,6 +34,11 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
             throw new BusinessException("预约不存在");
         }
 
+        // K2: 校验支付归属权，防止非本人支付
+        if (!appointment.getPatientId().equals(request.getPatientId())) {
+            throw new BusinessException("无权支付此预约");
+        }
+
         if (appointment.getPaymentStatus() != 0) {
             throw new BusinessException("该预约已支付或无需支付");
         }

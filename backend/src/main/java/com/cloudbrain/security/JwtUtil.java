@@ -9,6 +9,7 @@ import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class JwtUtil {
@@ -29,6 +30,7 @@ public class JwtUtil {
         Date expiry = new Date(now.getTime() + expiration);
 
         JwtBuilder builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())  // K8: jti 用于登出黑名单
                 .subject(userId)
                 .claim("username", username)
                 .claim("userType", userType)
@@ -65,6 +67,16 @@ public class JwtUtil {
     /** 获取用户类型 */
     public String getUserType(String token) {
         return parseToken(token).get("userType", String.class);
+    }
+
+    /** K8: 获取 JWT ID（jti），用于登出黑名单 */
+    public String getJti(String token) {
+        return parseToken(token).getId();
+    }
+
+    /** K8: 获取 Token 过期时间 */
+    public Date getExpirationDate(String token) {
+        return parseToken(token).getExpiration();
     }
 
     /** 校验 Token 是否有效 */

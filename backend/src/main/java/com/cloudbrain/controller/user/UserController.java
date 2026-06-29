@@ -12,8 +12,11 @@ import com.cloudbrain.dto.response.UserInfoVO;
 import com.cloudbrain.service.user.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -59,6 +62,7 @@ public class UserController extends BaseController {
 
     /** 获取所有用户列表（含角色信息，仅管理员），可按用户类型筛选 */
     @Operation(summary = "用户列表")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/list-all")
     public Result<List<UserInfoVO>> listAll(@RequestParam(required = false) Integer userType) {
         return success(userService.listAllUsers(userType));
@@ -66,6 +70,7 @@ public class UserController extends BaseController {
 
     /** 启用/禁用用户（仅管理员） */
     @Operation(summary = "启用/禁用用户")
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/status")
     public Result<String> status(@Valid @RequestBody UserStatusRequest request) {
         userService.updateStatus(request.getUserId(), request.getStatus());
@@ -74,6 +79,7 @@ public class UserController extends BaseController {
 
     /** 删除用户（仅管理员） */
     @Operation(summary = "删除用户")
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/delete")
     public Result<String> delete(@RequestParam String userId) {
         userService.deleteUser(userId);
@@ -86,5 +92,24 @@ public class UserController extends BaseController {
     public Result<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
         String userId = userService.register(request);
         return success(Map.of("userId", userId));
+    }
+
+    /** K8: 用户登出，将 Token 加入黑名单 */
+    @Operation(summary = "用户登出")
+    @PostMapping("/logout")
+    public Result<String> logout(HttpServletRequest request) {
+        String token = extractBearerToken(request);
+        if (token != null) {
+            userService.logout(token);
+        }
+        return success("已登出");
+    }
+
+    private String extractBearerToken(HttpServletRequest request) {
+        String bearer = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {
+            return bearer.substring(7);
+        }
+        return null;
     }
 }

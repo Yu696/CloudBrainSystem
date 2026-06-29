@@ -34,4 +34,7 @@ public interface UserService {
 
     /** 删除用户（仅管理员） */
     void deleteUser(String userId);
+
+    /** K8: 登出，将 Token 加入黑名单 */
+    void logout(String token);
 }
