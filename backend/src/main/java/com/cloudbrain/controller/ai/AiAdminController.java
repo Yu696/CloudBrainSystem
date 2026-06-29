@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class AiAdminController extends BaseController {
 
     private final PromptTemplateService promptTemplateService;

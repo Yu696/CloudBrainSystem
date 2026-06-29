@@ -21,13 +21,16 @@ import com.cloudbrain.security.JwtUtil;
 import com.cloudbrain.service.user.UserService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -39,6 +42,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
     private final PatientMapper patientMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public LoginResponse login(LoginRequest request) {
@@ -241,6 +245,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         // 删除用户
         removeById(userId);
+    }
+
+    /** K8: 登出，将 Token 加入 Redis 黑名单 */
+    @Override
+    public void logout(String token) {
+        String jti = jwtUtil.getJti(token);
+        Date expiration = jwtUtil.getExpirationDate(token);
+        long ttl = Math.max(0, expiration.getTime() - System.currentTimeMillis());
+        String blacklistKey = "token:blacklist:" + jti;
+        redisTemplate.opsForValue().set(blacklistKey, "1", Duration.ofMillis(ttl));
     }
 
     /** 获取当前用户实体（含密码，仅内部使用） */

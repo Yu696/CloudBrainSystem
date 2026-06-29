@@ -10,6 +10,7 @@ import com.cloudbrain.entity.Appointment;
 import com.cloudbrain.entity.Department;
 import com.cloudbrain.entity.Doctor;
 import com.cloudbrain.entity.Patient;
+import com.cloudbrain.entity.Payment;
 import com.cloudbrain.entity.Schedule;
 import com.cloudbrain.entity.TimeSlot;
 import com.cloudbrain.entity.User;
@@ -17,12 +18,14 @@ import com.cloudbrain.mapper.AppointmentMapper;
 import com.cloudbrain.mapper.DepartmentMapper;
 import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.PaymentMapper;
 import com.cloudbrain.mapper.ScheduleMapper;
 import com.cloudbrain.mapper.TimeSlotMapper;
 import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.service.appointment.AppointmentService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,6 +46,8 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private final PatientMapper patientMapper;
     private final DepartmentMapper departmentMapper;
     private final UserMapper userMapper;
+    private final PaymentMapper paymentMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     @Transactional
@@ -53,6 +59,22 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
             throw new BusinessException("时段不存在");
         }
 
+        // K1: Redis 分布式锁，防止并发抢占同一时段
+        String lockKey = "appointment:lock:slot:" + request.getSlotId();
+        Boolean locked = redisTemplate.opsForValue()
+                .setIfAbsent(lockKey, request.getPatientId(), 30, TimeUnit.SECONDS);
+        if (Boolean.FALSE.equals(locked)) {
+            throw new BusinessException("该时段正在被其他用户预约，请稍后再试");
+        }
+        try {
+            return doBook(request, slot);
+        } finally {
+            redisTemplate.delete(lockKey);
+        }
+    }
+
+    /** K1: 提取核心预约逻辑，由分布式锁保护 */
+    private Appointment doBook(AppointmentBookRequest request, TimeSlot slot) {
         // 校验时段状态
         if (slot.getStatus() == 1 && slot.getLockExpiryTime() != null
                 && slot.getLockExpiryTime().isBefore(LocalDateTime.now())) {
@@ -181,6 +203,24 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                     scheduleMapper.updateById(schedule);
                 }
             }
+        }
+
+        // K3: 已支付预约取消 → 创建退款记录
+        if (appointment.getPaymentStatus() != null && appointment.getPaymentStatus() == 1) {
+            Payment refund = new Payment();
+            refund.setPaymentId(UUIDUtil.generatePaymentId());
+            refund.setAppointmentId(appointment.getAppointmentId());
+            refund.setPatientId(appointment.getPatientId());
+            refund.setAmount(appointment.getTotalFee());
+            refund.setPaymentMethod(0); // 原路退回
+            refund.setPaymentStatus(2); // 已退款
+            refund.setTradeNo("RFD_" + System.currentTimeMillis());
+            refund.setRefundTime(LocalDateTime.now());
+            refund.setPaymentTime(LocalDateTime.now());
+            paymentMapper.insert(refund);
+
+            appointment.setPaymentStatus(2);
+            this.updateById(appointment);
         }
     }
 

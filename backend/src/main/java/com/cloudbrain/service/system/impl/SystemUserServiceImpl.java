@@ -88,10 +88,14 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
                 systemUserMapper.insert(su);
             }
             case "doctor" -> {
+                // K6: 创建医生时必须指定科室，不再硬编码回退 "0"
+                if (departmentId == null || departmentId.isBlank()) {
+                    throw new BusinessException("创建医生时必须指定科室");
+                }
                 Doctor doctor = new Doctor();
                 doctor.setDoctorId(UUIDUtil.generateDoctorId());
                 doctor.setUserId(userId);
-                doctor.setDepartmentId(departmentId != null && !departmentId.isBlank() ? departmentId : "0");
+                doctor.setDepartmentId(departmentId);
                 doctorMapper.insert(doctor);
             }
             // patient 无需创建额外记录

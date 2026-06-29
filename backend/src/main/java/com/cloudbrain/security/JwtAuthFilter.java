@@ -12,6 +12,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -32,6 +33,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final UserMapper userMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -41,6 +43,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String token = extractToken(request);
 
         if (token != null && jwtUtil.validate(token)) {
+            // K8: 检查 Token 是否在黑名单中（已登出）
+            String jti = jwtUtil.getJti(token);
+            String blacklistKey = "token:blacklist:" + jti;
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(blacklistKey))) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
             String userId = jwtUtil.getUserId(token);
             User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUserId, userId));
             if (user != null && user.getStatus() == 1) {
