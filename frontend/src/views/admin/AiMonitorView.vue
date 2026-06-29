@@ -206,7 +206,7 @@ function getStatusName(status: number) {
 }
 
 function getUserDisplay(row: any) {
-  return row.patientId || row.doctorId || '-'
+  return row.patientName || row.doctorId || '-'
 }
 
 onMounted(() => {
