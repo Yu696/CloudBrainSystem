@@ -1,12 +1,15 @@
 package com.cloudbrain.controller.ai;
 
 import com.cloudbrain.common.exception.BusinessException;
+import com.cloudbrain.config.TestDataSourceConfig;
 import com.cloudbrain.dto.PageResult;
 import com.cloudbrain.dto.request.ai.*;
 import com.cloudbrain.dto.response.ai.*;
 import com.cloudbrain.entity.TriageLog;
+import com.cloudbrain.mapper.AiCallLogMapper;
 import com.cloudbrain.mapper.DiagnosisResultMapper;
 import com.cloudbrain.mapper.GenerationLogMapper;
+import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.mapper.TriageLogMapper;
 import com.cloudbrain.service.ai.AiService;
 import com.cloudbrain.service.ai.DiseaseKbService;
@@ -16,8 +19,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -25,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.test.web.servlet.MockMvc;
@@ -51,11 +53,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AiControllerTest {
 
     @Configuration
+    @Import(TestDataSourceConfig.class)
     @EnableAutoConfiguration(exclude = {
             SecurityAutoConfiguration.class,
-            SecurityFilterAutoConfiguration.class,
-            DataSourceAutoConfiguration.class,
-            DataSourceTransactionManagerAutoConfiguration.class
+            SecurityFilterAutoConfiguration.class
     })
     @ComponentScan(
             basePackages = {"com.cloudbrain.controller.ai", "com.cloudbrain.common"},
@@ -81,6 +82,10 @@ class AiControllerTest {
     private DiagnosisResultMapper diagnosisResultMapper;
     @MockBean
     private GenerationLogMapper generationLogMapper;
+    @MockBean
+    private AiCallLogMapper aiCallLogMapper;
+    @MockBean
+    private PatientMapper patientMapper;
 
     private static final String PATIENT_ID = "P2024010100001";
     private static final String DOCTOR_ID = "D2024010100001";

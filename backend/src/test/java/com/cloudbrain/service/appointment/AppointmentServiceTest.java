@@ -6,9 +6,9 @@ import com.cloudbrain.dto.request.AppointmentCancelRequest;
 import com.cloudbrain.dto.request.ScheduleCreateRequest;
 import com.cloudbrain.entity.Appointment;
 import com.cloudbrain.entity.TimeSlot;
+import com.cloudbrain.CloudbrainTest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -17,7 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@CloudbrainTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @Transactional
 class AppointmentServiceTest {
@@ -111,7 +111,7 @@ class AppointmentServiceTest {
     void testListByPatient() {
         prepareAppointment();
 
-        List<Appointment> list = appointmentService.listByPatient(PATIENT_ID);
+        var list = appointmentService.listByPatient(PATIENT_ID);
         assertNotNull(list);
         assertFalse(list.isEmpty());
     }
