@@ -4,23 +4,25 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.ExaminationOrderCreateRequest;
+import com.cloudbrain.dto.request.ExaminationResultCreateRequest;
 import com.cloudbrain.dto.response.ExaminationOrderVO;
 import com.cloudbrain.dto.response.ExaminationResultVO;
-import com.cloudbrain.entity.ExaminationOrder;
-import com.cloudbrain.entity.ExaminationResult;
-import com.cloudbrain.entity.MedicalRecord;
-import com.cloudbrain.mapper.ExaminationOrderMapper;
-import com.cloudbrain.mapper.ExaminationResultMapper;
-import com.cloudbrain.mapper.MedicalRecordMapper;
+import com.cloudbrain.entity.*;
+import com.cloudbrain.mapper.*;
 import com.cloudbrain.service.medical.ExaminationService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +30,9 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
 
     private final MedicalRecordMapper medicalRecordMapper;
     private final ExaminationResultMapper examinationResultMapper;
+    private final PatientMapper patientMapper;
+    private final MedicalImageMapper medicalImageMapper;
+    private final DoctorMapper doctorMapper;
 
     /** 检查项目价格表 */
     private static final Map<String, BigDecimal> EXAM_PRICE_MAP = Map.<String, BigDecimal>ofEntries(
@@ -143,13 +148,160 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
     }
 
     @Override
+    public List<ExaminationOrderVO> listImagingOrders(String doctorId) {
+        LambdaQueryWrapper<ExaminationOrder> wrapper = new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getExamCategory, 1) // 影像学检查
+                .in(ExaminationOrder::getStatus, 0, 1, 2) // 已开单、已缴费、检查中
+                .orderByDesc(ExaminationOrder::getCreateTime);
+        if (doctorId != null && !doctorId.isBlank()) {
+            wrapper.eq(ExaminationOrder::getDoctorId, doctorId);
+        }
+        List<ExaminationOrder> orders = this.list(wrapper);
+        List<ExaminationOrderVO> voList = orders.stream()
+                .map(ExaminationOrderVO::from)
+                .collect(Collectors.toList());
+
+        // 批量查询患者姓名
+        List<String> patientIds = orders.stream()
+                .map(ExaminationOrder::getPatientId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!patientIds.isEmpty()) {
+            Map<String, String> nameMap = patientMapper.selectList(
+                    new LambdaQueryWrapper<Patient>()
+                            .in(Patient::getPatientId, patientIds))
+                    .stream()
+                    .collect(Collectors.toMap(Patient::getPatientId, Patient::getName, (a, b) -> a));
+            for (ExaminationOrderVO vo : voList) {
+                vo.setPatientName(nameMap.get(vo.getPatientId()));
+            }
+        }
+
+        return voList;
+    }
+
+    @Override
     public ExaminationResultVO getResult(String orderId) {
         ExaminationResult result = examinationResultMapper.selectOne(
                 new LambdaQueryWrapper<ExaminationResult>()
                         .eq(ExaminationResult::getOrderId, orderId));
         if (result == null) {
-            throw new BusinessException("检查结果不存在");
+            return null;
         }
         return ExaminationResultVO.from(result);
+    }
+
+    @Override
+    public ExaminationResultVO saveResult(ExaminationResultCreateRequest request) {
+        // 解析 orderId：优先用传入值，否则通过 imageId 查找或自动创建
+        String orderId = resolveOrderId(request);
+
+        // 验证检查单存在
+        ExaminationOrder order = this.getOne(new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getOrderId, orderId));
+        if (order == null) {
+            throw new BusinessException("检查单不存在");
+        }
+
+        // 查找已有结果，有则更新，无则新增
+        ExaminationResult result = examinationResultMapper.selectOne(
+                new LambdaQueryWrapper<ExaminationResult>()
+                        .eq(ExaminationResult::getOrderId, orderId));
+
+        boolean isNew = (result == null);
+        if (isNew) {
+            result = new ExaminationResult();
+            result.setOrderId(orderId);
+            result.setResultId(UUIDUtil.generateExaminationResultId());
+        }
+
+        result.setResultData(request.getResultData());
+        result.setReferenceRange(request.getReferenceRange());
+        result.setIsAbnormal(request.getIsAbnormal() != null ? request.getIsAbnormal() : 0);
+        result.setDoctorOpinion(request.getDoctorOpinion());
+        result.setReportFileUrl(request.getReportFileUrl());
+        result.setAiAnalysis(request.getAiAnalysis());
+        result.setResultTime(LocalDateTime.now());
+
+        if (isNew) {
+            examinationResultMapper.insert(result);
+        } else {
+            examinationResultMapper.updateById(result);
+        }
+
+        // 更新检查单状态为已完成(3)
+        if (order.getStatus() != null && order.getStatus() < 3) {
+            order.setStatus(3);
+            updateById(order);
+        }
+
+        return ExaminationResultVO.from(result);
+    }
+
+    /**
+     * 解析检查单 ID：优先用传入的 orderId，否则通过 imageId 查找或自动创建检查单
+     */
+    private String resolveOrderId(ExaminationResultCreateRequest request) {
+        String orderId = request.getOrderId();
+        if (orderId != null && !orderId.isBlank()) {
+            return orderId;
+        }
+
+        String imageId = request.getImageId();
+        if (imageId == null || imageId.isBlank()) {
+            throw new BusinessException("检查单ID和影像ID不能同时为空");
+        }
+
+        MedicalImage image = medicalImageMapper.selectOne(
+                new LambdaQueryWrapper<MedicalImage>().eq(MedicalImage::getImageId, imageId));
+        if (image == null) {
+            throw new BusinessException("影像不存在");
+        }
+
+        // 影像已关联检查单，直接使用
+        String existingOrderId = image.getExaminationId();
+        if (existingOrderId != null && !existingOrderId.isBlank()) {
+            ExaminationOrder existing = this.getOne(new LambdaQueryWrapper<ExaminationOrder>()
+                    .eq(ExaminationOrder::getOrderId, existingOrderId));
+            if (existing != null) {
+                return existingOrderId;
+            }
+        }
+
+        // 自动创建检查单
+        String newOrderId = (existingOrderId != null && !existingOrderId.isBlank())
+                ? existingOrderId
+                : UUIDUtil.generateExaminationOrderId();
+
+        ExaminationOrder order = new ExaminationOrder();
+        order.setOrderId(newOrderId);
+        order.setPatientId(image.getPatientId());
+        order.setDoctorId(getCurrentDoctorId());
+        order.setExamCategory(1); // 影像学检查
+        order.setExamName(image.getModality() != null ? image.getModality() : "影像检查");
+        order.setExamPurpose(image.getBodyPart());
+        order.setStatus(0);
+        order.setAmount(BigDecimal.ZERO);
+        save(order);
+
+        // 更新影像的 examinationId
+        image.setExaminationId(newOrderId);
+        medicalImageMapper.updateById(image);
+
+        return newOrderId;
+    }
+
+    /** 获取当前登录医生的 doctorId */
+    private String getCurrentDoctorId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof User user) {
+            Doctor doctor = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getUserId, user.getUserId()));
+            if (doctor != null) {
+                return doctor.getDoctorId();
+            }
+        }
+        throw new BusinessException("无法获取医生信息");
     }
 }

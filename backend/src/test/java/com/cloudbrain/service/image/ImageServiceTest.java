@@ -5,10 +5,14 @@ import com.cloudbrain.TestAuthUtils;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.PageResult;
 import com.cloudbrain.dto.response.image.ImageVO;
+import com.cloudbrain.entity.MedicalImage;
+import com.cloudbrain.mapper.MedicalImageMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,16 +24,33 @@ class ImageServiceTest {
     @Autowired
     private ImageService imageService;
 
+    @Autowired
+    private MedicalImageMapper medicalImageMapper;
+
     private static String testImageId;
+    private static final List<String> createdImageIds = new ArrayList<>();
+    private static MedicalImageMapper staticMapper;
 
     @BeforeEach
     void setUpAuth() {
         TestAuthUtils.setupAuth();
+        if (staticMapper == null) {
+            staticMapper = medicalImageMapper;
+        }
     }
 
     @AfterEach
     void tearDownAuth() {
         TestAuthUtils.clearAuth();
+    }
+
+    @AfterAll
+    static void cleanup() {
+        if (staticMapper != null && !createdImageIds.isEmpty()) {
+            createdImageIds.forEach(imageId ->
+                    staticMapper.delete(new LambdaQueryWrapper<MedicalImage>()
+                            .eq(MedicalImage::getImageId, imageId)));
+        }
     }
 
     @Test
@@ -52,6 +73,7 @@ class ImageServiceTest {
         assertNotNull(vo.getUploadTime());
 
         testImageId = vo.getImageId();
+        createdImageIds.add(vo.getImageId());
     }
 
     @Test
@@ -65,6 +87,7 @@ class ImageServiceTest {
         ImageVO vo = imageService.upload(file, "PAT_002", null, "X光", "胸部");
         assertEquals(1, vo.getImageType()); // JPG
         assertEquals("JPG", vo.getImageTypeName());
+        createdImageIds.add(vo.getImageId());
     }
 
     @Test
@@ -100,7 +123,7 @@ class ImageServiceTest {
     @Order(6)
     @DisplayName("影像列表分页查询")
     void testList() {
-        PageResult<ImageVO> result = imageService.list(null, null, null, false, 1, 10);
+        PageResult<ImageVO> result = imageService.list(null, null, null, null, false, 1, 10);
         assertTrue(result.getTotal() > 0);
         assertNotNull(result.getRecords().get(0).getImageId());
     }
@@ -124,6 +147,7 @@ class ImageServiceTest {
                 "file", "ct_brain.png", "image/png",
                 "second-image".getBytes());
         ImageVO vo2 = imageService.upload(file, "PAT_001", null, "CT", "头部");
+        createdImageIds.add(vo2.getImageId());
 
         var result = imageService.compare(testImageId, vo2.getImageId());
         assertEquals(testImageId, result.get("imageId1"));

@@ -5,8 +5,8 @@
     <!-- 搜索栏 -->
     <div class="cb-card search-card">
       <el-form :model="searchForm" inline>
-        <el-form-item label="患者ID">
-          <el-input v-model="searchForm.patientId" placeholder="患者ID" clearable style="width: 160px" @keyup.enter="handleSearch" />
+        <el-form-item label="患者姓名">
+          <el-input v-model="searchForm.patientName" placeholder="患者姓名" clearable style="width: 160px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="检查ID">
           <el-input v-model="searchForm.examinationId" placeholder="检查ID" clearable style="width: 160px" @keyup.enter="handleSearch" />
@@ -35,14 +35,16 @@
     <div class="cb-card">
       <el-table :data="images" v-loading="loading" stripe style="width: 100%">
         <el-table-column prop="imageName" label="影像文件名" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="imageType" label="类型" width="120" align="center">
+        <el-table-column prop="imageTypeName" label="类型" width="120" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.imageType === 'DICOM'" type="primary" size="small">DICOM</el-tag>
-            <el-tag v-else-if="row.imageType === 'JPG'" type="success" size="small">JPG</el-tag>
-            <el-tag v-else-if="row.imageType === 'PNG'" type="warning" size="small">PNG</el-tag>
-            <el-tag v-else size="small">{{ row.imageType }}</el-tag>
+            <el-tag v-if="row.imageType === 0" type="primary" size="small">DICOM</el-tag>
+            <el-tag v-else-if="row.imageType === 1" type="success" size="small">JPG</el-tag>
+            <el-tag v-else-if="row.imageType === 2" type="warning" size="small">PNG</el-tag>
+            <el-tag v-else size="small">其他</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="patientName" label="患者姓名" width="110" align="center" />
+        <el-table-column prop="patientId" label="患者ID" width="150" show-overflow-tooltip />
         <el-table-column prop="modality" label="成像设备" width="110" align="center" />
         <el-table-column prop="bodyPart" label="身体部位" width="120" align="center" />
         <el-table-column prop="fileSize" label="文件大小" width="120" align="right">
@@ -98,7 +100,7 @@ const page = ref(1)
 const pageSize = ref(10)
 
 const searchForm = reactive({
-  patientId: '',
+  patientName: '',
   examinationId: '',
   modality: ''
 })
@@ -114,7 +116,7 @@ async function loadImages() {
       page: page.value,
       pageSize: pageSize.value
     }
-    if (searchForm.patientId) params.patientId = searchForm.patientId
+    if (searchForm.patientName) params.patientName = searchForm.patientName
     if (searchForm.examinationId) params.examinationId = searchForm.examinationId
     if (searchForm.modality) params.modality = searchForm.modality
 
@@ -136,7 +138,7 @@ function handleSearch() {
 }
 
 function handleReset() {
-  searchForm.patientId = ''
+  searchForm.patientName = ''
   searchForm.examinationId = ''
   searchForm.modality = ''
   page.value = 1

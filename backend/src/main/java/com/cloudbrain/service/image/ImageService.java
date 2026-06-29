@@ -17,10 +17,16 @@ public interface ImageService {
     ImageVO getInfo(String imageId);
 
     /** 影像列表分页查询 */
-    PageResult<ImageVO> list(String patientId, String examinationId, String modality, Boolean myExams, int page, int pageSize);
+    PageResult<ImageVO> list(String patientId, String patientName, String examinationId, String modality, Boolean myExams, int page, int pageSize);
 
     /** 影像预览（返回字节流） */
     byte[] preview(String imageId);
+
+    /** 影像预览（返回输入流，支持流式传输） */
+    java.io.InputStream previewAsStream(String imageId);
+
+    /** 获取影像预览 URL（MinIO 预签名，local 返回相对路径） */
+    String getPreviewUrl(String imageId);
 
     /** 删除影像 */
     void delete(String imageId);

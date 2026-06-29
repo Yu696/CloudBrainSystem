@@ -38,6 +38,25 @@ public class MedicalRecordServiceImpl extends ServiceImpl<MedicalRecordMapper, M
     @Override
     @Transactional
     public MedicalRecordVO createRecord(MedicalRecordCreateRequest request) {
+        // 检查该预约是否已有病历，有则更新
+        if (request.getAppointmentId() != null && !request.getAppointmentId().isBlank()) {
+            MedicalRecord existing = this.getOne(new LambdaQueryWrapper<MedicalRecord>()
+                    .eq(MedicalRecord::getAppointmentId, request.getAppointmentId()));
+            if (existing != null) {
+                existing.setChiefComplaint(request.getChiefComplaint());
+                if (request.getPresentIllness() != null) existing.setPresentIllness(request.getPresentIllness());
+                if (request.getPastHistory() != null) existing.setPastHistory(request.getPastHistory());
+                if (request.getPersonalHistory() != null) existing.setPersonalHistory(request.getPersonalHistory());
+                if (request.getFamilyHistory() != null) existing.setFamilyHistory(request.getFamilyHistory());
+                if (request.getPhysicalExam() != null) existing.setPhysicalExam(request.getPhysicalExam());
+                if (request.getAuxiliaryExam() != null) existing.setAuxiliaryExam(request.getAuxiliaryExam());
+                if (request.getDiagnosis() != null) existing.setDiagnosis(request.getDiagnosis());
+                if (request.getTreatmentOpinion() != null) existing.setTreatmentOpinion(request.getTreatmentOpinion());
+                updateById(existing);
+                return MedicalRecordVO.from(existing);
+            }
+        }
+
         MedicalRecord record = new MedicalRecord();
         record.setRecordId(UUIDUtil.generateRecordId());
         record.setPatientId(request.getPatientId());
