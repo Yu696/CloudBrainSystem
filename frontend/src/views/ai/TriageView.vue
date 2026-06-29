@@ -161,17 +161,18 @@
           <span>推荐科室</span>
         </div>
         <div class="card-body">
-          <div class="dept-primary">
-            <span class="dept-badge">首选</span>
-            <span class="dept-name">{{ triageResult.recommendedDepartment.departmentName }}</span>
-            <span class="dept-confidence">{{ (triageResult.recommendedDepartment.confidence * 100).toFixed(0) }}% 匹配</span>
-          </div>
-          <div v-if="triageResult.alternativeDepartments?.length">
-            <div class="alt-divider">其他可选科室</div>
-            <div v-for="dept in triageResult.alternativeDepartments" :key="dept.departmentId" class="dept-alt">
+          <div v-for="(dept, idx) in allDepartments" :key="dept.departmentId || idx" class="dept-card-item" :class="{ first: idx === 0 }">
+            <div class="dept-card-left">
+              <span v-if="idx === 0" class="dept-badge">首选</span>
               <span class="dept-name">{{ dept.departmentName }}</span>
-              <span class="dept-confidence">{{ (dept.confidence * 100).toFixed(0) }}%</span>
+              <span class="dept-confidence">{{ (dept.confidence * 100).toFixed(0) }}% 匹配</span>
             </div>
+            <el-button type="primary" size="default" class="dept-book-btn" @click="goBookDept(dept)">
+              挂号
+            </el-button>
+          </div>
+          <div v-if="allDepartments.length === 0" style="text-align:center;color:#8E8E93;padding:16px">
+            暂无可挂号科室，建议重新描述症状或直接选择科室
           </div>
         </div>
       </div>
@@ -232,21 +233,15 @@
               <div class="match-val">{{ (doc.matchScore * 100).toFixed(0) }}%</div>
               <div class="match-label">匹配</div>
             </div>
+            <el-button type="primary" size="small" class="doc-book-btn" @click="goBookDoctor(doc)">
+              挂号
+            </el-button>
           </div>
         </div>
       </div>
 
       <!-- 操作区 -->
       <div class="action-bar-patient">
-        <el-button type="primary" size="large" class="cta-button cta-primary" @click="goBookAppointment">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          挂号 {{ triageResult.recommendedDepartment.departmentName }}
-        </el-button>
         <el-button size="large" class="cta-button cta-secondary" @click="resetTriage">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px">
             <polyline points="1 4 1 10 7 10" />
@@ -279,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { triageApi } from '@/api/ai'
@@ -307,6 +302,26 @@ const rules = {
 const analyzing = ref(false)
 const triageResult = ref<any>(null)
 const fallbackMode = ref(false)
+
+// 合并推荐科室 + 备选科室为统一列表，按置信度降序（去重：备选中与首选相同的跳过）
+const allDepartments = computed(() => {
+  const result = triageResult.value
+  if (!result) return []
+  const list: any[] = []
+  const preferredId = result.recommendedDepartment?.departmentId
+  if (preferredId) {
+    list.push(result.recommendedDepartment)
+  }
+  if (result.alternativeDepartments) {
+    for (const d of result.alternativeDepartments) {
+      // 如果备选科室与首选科室相同，跳过
+      if (d.departmentId && d.departmentId === preferredId) continue
+      if (d.departmentId) list.push(d)
+    }
+  }
+  list.sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))
+  return list
+})
 
 onMounted(() => {
   if (!patientId.value) {
@@ -358,12 +373,28 @@ function resetTriage() {
 }
 
 function goBookAppointment() {
-  if (!triageResult.value?.recommendedDepartment) return
+  if (!triageResult.value?.recommendedDepartment?.departmentId) return
+  goBookDept(triageResult.value.recommendedDepartment)
+}
+
+function goBookDept(dept: any) {
   router.push({
     path: '/appointment/doctor',
     query: {
-      deptId: triageResult.value.recommendedDepartment.departmentId,
-      deptName: triageResult.value.recommendedDepartment.departmentName,
+      deptId: dept.departmentId,
+      deptName: dept.departmentName,
+      fromTriage: 'true'
+    }
+  })
+}
+
+function goBookDoctor(doc: any) {
+  router.push({
+    path: '/appointment/doctor',
+    query: {
+      doctorId: doc.doctorId,
+      deptId: doc.departmentId || triageResult.value?.recommendedDepartment?.departmentId,
+      deptName: doc.departmentName,
       fromTriage: 'true'
     }
   })
@@ -610,14 +641,25 @@ function goManualDept() {
 }
 
 /* ===== 科室推荐 ===== */
-.dept-primary {
+.dept-card-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.dept-card-item.first {
+  background: #f0f7ff;
+}
+.dept-card-item:last-child {
+  border-bottom: none;
+}
+.dept-card-left {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  background: #f0f7ff;
-  border-radius: 12px;
-  margin-bottom: 12px;
+  flex: 1;
 }
 .dept-badge {
   display: inline-block;
@@ -627,36 +669,20 @@ function goManualDept() {
   color: #fff;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 .dept-name {
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
   color: #1C1C1E;
-  flex: 1;
 }
 .dept-confidence {
   font-size: 13px;
   color: #8E8E93;
 }
-.alt-divider {
-  font-size: 13px;
-  color: #8E8E93;
-  margin-bottom: 8px;
-  padding-left: 4px;
-}
-.dept-alt {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: 10px;
-  transition: background 0.2s;
-}
-.dept-alt:hover {
-  background: #f5f5f7;
-}
-.dept-alt .dept-name {
-  font-size: 14px;
+.dept-book-btn {
+  border-radius: 10px !important;
+  flex-shrink: 0;
 }
 
 /* ===== 疾病匹配 ===== */
@@ -784,6 +810,10 @@ function goManualDept() {
 .match-label {
   font-size: 11px;
   color: #8E8E93;
+}
+.doc-book-btn {
+  border-radius: 10px !important;
+  flex-shrink: 0;
 }
 
 /* ===== 操作栏 ===== */

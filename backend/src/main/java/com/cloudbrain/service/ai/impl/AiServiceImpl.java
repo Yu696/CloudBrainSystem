@@ -118,26 +118,63 @@ public class AiServiceImpl implements AiService {
         return TriageVO.fallback(request.getChiefComplaint());
     }
 
-    /** 从数据库匹配真实医生推荐，科室名多级降级匹配 */
+    /** 从数据库匹配真实医生推荐，科室名多级降级匹配，滤除 DB 不存在的科室 */
     private void enrichDoctorsFromDB(TriageVO vo) {
-        // 处理主推荐科室和备选科室
         TriageVO.DepartmentInfo dept = vo.getRecommendedDepartment();
+        boolean primaryOk = false;
         if (dept != null && dept.getDepartmentName() != null) {
-            matchDeptAndEnrich(dept, vo);
+            primaryOk = matchDeptAndEnrich(dept, vo);
         }
+
+        // 收集所有科室（主推荐 + 备选），去重并校验
+        List<TriageVO.DepartmentInfo> merged = new ArrayList<>();
+        Set<String> seenIds = new java.util.HashSet<>();
+
+        if (primaryOk && dept.getDepartmentId() != null && seenIds.add(dept.getDepartmentId())) {
+            merged.add(TriageVO.DepartmentInfo.builder()
+                    .departmentId(dept.getDepartmentId()).departmentName(dept.getDepartmentName())
+                    .confidence(dept.getConfidence()).build());
+        }
+
         if (vo.getAlternativeDepartments() != null) {
             for (TriageVO.DepartmentInfo alt : vo.getAlternativeDepartments()) {
                 if (alt.getDepartmentName() != null) {
                     matchDeptOnly(alt);
                 }
+                if (alt.getDepartmentId() != null && seenIds.add(alt.getDepartmentId())) {
+                    merged.add(TriageVO.DepartmentInfo.builder()
+                            .departmentId(alt.getDepartmentId()).departmentName(alt.getDepartmentName())
+                            .confidence(alt.getConfidence()).build());
+                }
             }
         }
+
+        // 主推荐没匹配上但有备选匹配 → 用第一个备选
+        if (!primaryOk && !merged.isEmpty()) {
+            TriageVO.DepartmentInfo first = merged.get(0);
+            vo.setRecommendedDepartment(TriageVO.DepartmentInfo.builder()
+                    .departmentId(first.getDepartmentId()).departmentName(first.getDepartmentName())
+                    .confidence(first.getConfidence()).build());
+            merged.remove(0);
+            // 给这个科室也补上医生
+            matchDeptAndEnrich(vo.getRecommendedDepartment(), vo);
+        }
+
+        // 主推荐也没匹配上，备选也没有 → 降级
+        if (!primaryOk && merged.isEmpty()) {
+            vo.setRecommendedDepartment(null);
+            vo.setAlternativeDepartments(null);
+            vo.setRecommendedDoctors(null);
+            return;
+        }
+
+        vo.setAlternativeDepartments(merged.isEmpty() ? null : merged);
     }
 
-    /** 匹配科室 + 填充医生推荐 */
-    private void matchDeptAndEnrich(TriageVO.DepartmentInfo dept, TriageVO vo) {
+    /** 匹配科室 + 填充医生推荐，返回是否匹配成功 */
+    private boolean matchDeptAndEnrich(TriageVO.DepartmentInfo dept, TriageVO vo) {
         Department department = multiLevelDeptMatch(dept.getDepartmentName());
-        if (department == null) return;
+        if (department == null) return false;
 
         dept.setDepartmentId(department.getDepartmentId());
         dept.setDepartmentName(department.getName());
@@ -147,7 +184,7 @@ public class AiServiceImpl implements AiService {
                 new LambdaQueryWrapper<Doctor>()
                         .eq(Doctor::getDepartmentId, department.getDepartmentId())
                         .eq(Doctor::getAvailable, 1));
-        if (doctors.isEmpty()) return;
+        if (doctors.isEmpty()) return true;  // 科室匹配成功但无医生
 
         Set<String> diseaseNames = new java.util.HashSet<>();
         if (vo.getDiseaseMatches() != null) {
@@ -174,6 +211,7 @@ public class AiServiceImpl implements AiService {
                     .doctorId(d.getDoctorId())
                     .doctorName(doctorName)
                     .title(d.getTitle())
+                    .departmentId(department.getDepartmentId())
                     .departmentName(department.getName())
                     .matchScore(BigDecimal.valueOf(Math.round(score * 100.0) / 100.0))
                     .build());
@@ -181,14 +219,17 @@ public class AiServiceImpl implements AiService {
 
         infos.sort((a, b) -> b.getMatchScore().compareTo(a.getMatchScore()));
         vo.setRecommendedDoctors(infos);
+        return true;
     }
 
-    /** 仅匹配科室 ID 和修正名称，不查医生 */
+    /** 仅匹配科室 ID 和修正名称，不查医生；匹配失败则清空 departmentId */
     private void matchDeptOnly(TriageVO.DepartmentInfo dept) {
         Department department = multiLevelDeptMatch(dept.getDepartmentName());
         if (department != null) {
             dept.setDepartmentId(department.getDepartmentId());
             dept.setDepartmentName(department.getName());
+        } else {
+            dept.setDepartmentId(null);  // 标记为不匹配
         }
     }
 
@@ -443,6 +484,16 @@ public class AiServiceImpl implements AiService {
 
     // ==================== Prompt 构建 ====================
 
+    /** 从 PatientContext 填充通用患者变量到 vars map */
+    private void fillPatientVars(Map<String, String> vars, PatientContext ctx) {
+        vars.put("age", String.valueOf(ctx.getAge()));
+        vars.put("gender", ctx.getGender() == 1 ? "男" : "女");
+        vars.put("allergy_history", ctx.getAllergyHistory() != null ? ctx.getAllergyHistory() : "无");
+        vars.put("medical_history", ctx.getMedicalHistory() != null ? ctx.getMedicalHistory() : "无");
+        vars.put("current_medications", ctx.getCurrentMedications() != null
+                ? ctx.getCurrentMedications().toString() : "无");
+    }
+
     private String renderTriagePrompt(List<PromptTemplate> templates, TriageRequest request, PatientContext ctx) {
         // 动态生成可选的科室列表
         List<Department> allDepts = departmentMapper.selectList(
@@ -470,14 +521,9 @@ public class AiServiceImpl implements AiService {
                 "\"confidenceScore\":0.0, \"analysisDetail\":\"\" }");
 
         Map<String, String> vars = new HashMap<>();
+        fillPatientVars(vars, ctx);
         vars.put("dept_hint", deptHint);
         vars.put("chief_complaint", sanitizeInput(request.getChiefComplaint()));
-        vars.put("age", String.valueOf(ctx.getAge()));
-        vars.put("gender", ctx.getGender() == 1 ? "男" : "女");
-        vars.put("allergy_history", ctx.getAllergyHistory() != null ? ctx.getAllergyHistory() : "无");
-        vars.put("medical_history", ctx.getMedicalHistory() != null ? ctx.getMedicalHistory() : "无");
-        vars.put("current_medications", ctx.getCurrentMedications() != null
-                ? ctx.getCurrentMedications().toString() : "无");
 
         return promptTemplateService.render(template, vars);
     }
@@ -500,16 +546,11 @@ public class AiServiceImpl implements AiService {
 
         Map<String, Object> symptomData = request.getSymptomData();
         Map<String, String> vars = new HashMap<>();
+        fillPatientVars(vars, ctx);
         vars.put("chief_complaint", sanitizeInput(symptomData != null
                 ? String.valueOf(symptomData.getOrDefault("chiefComplaint", "")) : ""));
         vars.put("present_illness", sanitizeInput(symptomData != null
                 ? String.valueOf(symptomData.getOrDefault("presentIllness", "")) : ""));
-        vars.put("age", String.valueOf(ctx.getAge()));
-        vars.put("gender", ctx.getGender() == 1 ? "男" : "女");
-        vars.put("allergy_history", ctx.getAllergyHistory() != null ? ctx.getAllergyHistory() : "无");
-        vars.put("medical_history", ctx.getMedicalHistory() != null ? ctx.getMedicalHistory() : "无");
-        vars.put("current_medications", ctx.getCurrentMedications() != null
-                ? ctx.getCurrentMedications().toString() : "无");
         vars.put("physical_exam", sanitizeInput(symptomData != null
                 ? String.valueOf(symptomData.getOrDefault("physicalExam", "")) : ""));
         vars.put("auxiliary_exam", sanitizeInput(symptomData != null
@@ -622,10 +663,7 @@ public class AiServiceImpl implements AiService {
         }
 
         Map<String, String> vars = new HashMap<>();
-        vars.put("allergy_history", ctx.getAllergyHistory() != null ? ctx.getAllergyHistory() : "无");
-        vars.put("medical_history", ctx.getMedicalHistory() != null ? ctx.getMedicalHistory() : "无");
-        vars.put("current_medications", ctx.getCurrentMedications() != null
-                ? ctx.getCurrentMedications().toString() : "无");
+        fillPatientVars(vars, ctx);
         vars.put("prescription_items", itemsStr.toString());
 
         return promptTemplateService.render(template, vars);
@@ -644,11 +682,8 @@ public class AiServiceImpl implements AiService {
                 "\"physicalExam\":\"\",\"preliminaryDiagnosis\":\"\",\"treatmentPlan\":\"\"} }");
 
         Map<String, String> vars = new HashMap<>();
+        fillPatientVars(vars, ctx);
         vars.put("dialogue", sanitizeInput(request.getDialogueText()));
-        vars.put("age", String.valueOf(ctx.getAge()));
-        vars.put("gender", ctx.getGender() == 1 ? "男" : "女");
-        vars.put("medical_history", ctx.getMedicalHistory() != null ? ctx.getMedicalHistory() : "无");
-        vars.put("allergy_history", ctx.getAllergyHistory() != null ? ctx.getAllergyHistory() : "无");
 
         return promptTemplateService.render(template, vars);
     }

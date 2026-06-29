@@ -25,10 +25,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="content" label="内容预览" min-width="300" show-overflow-tooltip />
-        <el-table-column prop="variables" label="变量" width="180">
+        <el-table-column prop="variables" label="变量" width="240">
           <template #default="{ row }">
             <span v-if="row.variables?.length">
-              <el-tag v-for="v in row.variables" :key="v" size="small" style="margin:1px 2px">{{ v }}</el-tag>
+              <el-tag v-for="v in row.variables" :key="v" size="small" style="margin:1px 2px">{{ formatVarLabel(v) }}</el-tag>
             </span>
             <span v-else class="no-data">-</span>
           </template>
@@ -65,7 +65,7 @@
         </el-form-item>
         <el-form-item label="变量">
           <el-select v-model="form.variables" multiple filterable allow-create default-first-option placeholder="输入变量名后回车" style="width:100%">
-            <el-option v-for="v in presetVars" :key="v" :label="v" :value="v" />
+            <el-option v-for="v in presetVars" :key="v" :label="formatVarLabel(v)" :value="v" />
           </el-select>
           <div class="form-tip">在模板内容中用 <code>\{\{变量名\}\}</code> 引用，输入的变量名不带大括号</div>
         </el-form-item>
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { listPromptTemplatesApi, createPromptTemplateApi, updatePromptTemplateApi, deletePromptTemplateApi, togglePromptTemplateStatusApi } from '@/api/ai'
@@ -96,7 +96,40 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const editId = ref('')
 
-const presetVars = ['chief_complaint', 'age', 'gender', 'allergy_history', 'medical_history', 'current_medications', 'dialogue', 'patient_info', 'prescription_items', 'physical_exam', 'auxiliary_exam', 'present_illness']
+/** 变量元数据：key → { label, types (适用的模板类型) } */
+const varMetaList: { key: string; label: string; types: number[] }[] = [
+  // 通用变量（PatientContext 系统自动注入）
+  { key: 'age',                label: '年龄',       types: [0, 1] },
+  { key: 'gender',             label: '性别',       types: [0, 1] },
+  { key: 'allergy_history',    label: '过敏史',     types: [0, 1, 2] },
+  { key: 'medical_history',    label: '既往病史',   types: [0, 1, 2] },
+  { key: 'current_medications',label: '当前用药',   types: [0, 1, 2] },
+  // 分诊(type=0) 专用
+  { key: 'chief_complaint',    label: '主诉',       types: [0, 1] },
+  { key: 'dept_hint',          label: '可选科室列表', types: [0] },
+  // 诊断(type=1) 专用
+  { key: 'present_illness',    label: '现病史',     types: [1] },
+  { key: 'physical_exam',      label: '体格检查',   types: [1] },
+  { key: 'auxiliary_exam',     label: '辅助检查',   types: [1] },
+  { key: 'disease_knowledge_ref', label: '疾病知识库参考', types: [1] },
+  // 处方审核(type=2) 专用
+  { key: 'prescription_items', label: '待审核处方药品', types: [2] },
+  // 病历生成(type=1) 专用
+  { key: 'dialogue',           label: '医患对话内容', types: [1] },
+  { key: 'patient_info',       label: '患者综合信息', types: [1, 2] },
+]
+
+/** key → label 快速查找 */
+const varLabelMap: Record<string, string> = {}
+for (const v of varMetaList) {
+  varLabelMap[v.key] = v.label
+}
+
+/** 格式化变量显示：中文名：{{变量名}} */
+function formatVarLabel(v: string): string {
+  const cn = varLabelMap[v]
+  return cn ? `${cn}：{{${v}}}` : `{{${v}}}`
+}
 
 /** 按模板类型获取预设 JSON Schema */
 function getDefaultContentForType(type: number): string {
@@ -143,6 +176,13 @@ const rules = {
   content: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
 }
 
+/** 按当前模板类型过滤可用变量列表 */
+const presetVars = computed(() =>
+  varMetaList
+    .filter(v => v.types.includes(form.templateType))
+    .map(v => v.key)
+)
+
 onMounted(() => { loadTemplates() })
 
 const textareaEl = () => contentInputRef.value?.$el?.querySelector('textarea') as HTMLTextAreaElement | null
@@ -159,22 +199,45 @@ function onContentBlur() {
   if (el) savedCursorPos.value = el.selectionStart
 }
 
-// 变量列表变化：新增自动在光标处插入 {{变量}}，删除自动移除 {{变量}}
+// 变量列表变化：新增自动在光标处插入"中文名：{{变量}}"，删除只移除该项并回退光标
 watch(() => [...form.variables], (newVars, oldVars) => {
   const old = oldVars || []
-  // 新增的变量 → 在光标位置插入
+  // 新增的变量 → 在光标位置插入"中文名：{{变量}}"
   const added = newVars.filter((v: string) => !old.includes(v))
   for (const v of added) {
-    const placeholder = `{{${v}}}`
-    if (!form.content.includes(placeholder)) {
+    const label = varLabelMap[v]
+    const snippet = label ? `\n${label}：{{${v}}}` : `{{${v}}}`
+    if (!form.content.includes(`{{${v}}}`)) {
       const pos = savedCursorPos.value >= 0 ? savedCursorPos.value : form.content.length
-      form.content = form.content.slice(0, pos) + ` {{${v}}}` + form.content.slice(pos)
+      form.content = form.content.slice(0, pos) + snippet + form.content.slice(pos)
+      // 更新光标记录到插入内容末尾
+      savedCursorPos.value = pos + snippet.length
     }
   }
-  // 删除的变量 → 移除
+  // 删除的变量：独占一行则连前置换行一起删，否则只删字段本身
   const removed = old.filter((v: string) => !newVars.includes(v))
   for (const v of removed) {
-    form.content = form.content.replace(new RegExp(`\\s*\\{\\{${v}\\}\\}`, 'g'), '')
+    const label = varLabelMap[v]
+    if (label) {
+      const pattern = new RegExp(`${label}[：:]\\s*\\{\\{${v}\\}\\}`, 'g')
+      const match = pattern.exec(form.content)
+      if (match) {
+        const idx = match.index
+        const len = match[0].length
+        const before = idx > 0 ? form.content[idx - 1] : ''
+        const after = idx + len < form.content.length ? form.content[idx + len] : ''
+        // 判断是否独占一整行（前后都是换行，或开头/结尾）
+        const isWholeLine = (idx === 0 || before === '\n') && (idx + len >= form.content.length || after === '\n')
+        if (isWholeLine && before === '\n') {
+          // 连前置换行一起删，光标移到换行处
+          form.content = form.content.slice(0, idx - 1) + form.content.slice(idx + len)
+          savedCursorPos.value = idx - 1
+        } else {
+          form.content = form.content.slice(0, idx) + form.content.slice(idx + len)
+          savedCursorPos.value = idx
+        }
+      }
+    }
   }
 })
 
@@ -197,8 +260,12 @@ function openCreate() {
   dialogVisible.value = true
 }
 
-/** 切换模板类型时自动刷新预设内容（仅在新建且用户未修改过内容时） */
+/** 切换模板类型时自动刷新预设内容，并清理不属于新类型的变量 */
 function onTypeChange(type: number) {
+  // 清理不属于新类型的变量
+  const validKeys = varMetaList.filter(v => v.types.includes(type)).map(v => v.key)
+  form.variables = form.variables.filter(v => validKeys.includes(v))
+
   if (!isEdit.value) {
     // 如果当前内容是其他类型的预设，自动替换为新类型的预设
     const allDefaults = [0, 1, 2].map(t => getDefaultContentForType(t))
