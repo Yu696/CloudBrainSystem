@@ -5,10 +5,6 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * 药品实体 — 阶段二最小化版本
- * 完整字段待阶段三（M07 药库管理）补充
- */
 @Data
 @TableName("drug")
 public class Drug {
@@ -28,6 +24,9 @@ public class Drug {
     @TableField("generic_name")
     private String genericName;
 
+    /** 主要成分（阶段三补充） */
+    private String ingredients;
+
     private String spec;
 
     @TableField("dosage_form")
@@ -39,6 +38,10 @@ public class Drug {
 
     @TableField("unit_price")
     private BigDecimal unitPrice;
+
+    /** 进价（阶段三补充） */
+    @TableField("purchase_price")
+    private BigDecimal purchasePrice;
 
     @TableField("usage_method")
     private String usageMethod;
