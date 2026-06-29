@@ -103,6 +103,29 @@
               </el-menu-item>
             </el-sub-menu>
           </el-sub-menu>
+
+          <el-sub-menu index="pharmacy">
+            <template #title>
+              <el-icon><Goods /></el-icon>
+              <span>药库管理</span>
+            </template>
+            <el-menu-item index="/pharmacy/drugs">
+              <el-icon><List /></el-icon>
+              <template #title>药品管理</template>
+            </el-menu-item>
+            <el-menu-item index="/pharmacy/inventory">
+              <el-icon><DataBoard /></el-icon>
+              <template #title>库存管理</template>
+            </el-menu-item>
+            <el-menu-item index="/pharmacy/dispense">
+              <el-icon><TakeawayBox /></el-icon>
+              <template #title>发药管理</template>
+            </el-menu-item>
+            <el-menu-item index="/pharmacy/warehouse">
+              <el-icon><HomeFilled /></el-icon>
+              <template #title>仓库管理</template>
+            </el-menu-item>
+          </el-sub-menu>
         </template>
 
         <!-- ===== 医生菜单 ===== -->
@@ -134,6 +157,25 @@
             <el-menu-item index="/doctor/history">
               <el-icon><Clock /></el-icon>
               <template #title>已诊列表</template>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="image">
+            <template #title>
+              <el-icon><Picture /></el-icon>
+              <span>影像管理</span>
+            </template>
+            <el-menu-item index="/image/upload">
+              <el-icon><Upload /></el-icon>
+              <template #title>上传影像</template>
+            </el-menu-item>
+            <el-menu-item index="/image/list">
+              <el-icon><List /></el-icon>
+              <template #title>影像列表</template>
+            </el-menu-item>
+            <el-menu-item index="/image/compare">
+              <el-icon><Rank /></el-icon>
+              <template #title>影像对比</template>
             </el-menu-item>
           </el-sub-menu>
 
@@ -239,7 +281,8 @@ import {
   Odometer, User, Setting, UserFilled, Key,
   Fold, Expand, ArrowDown, SwitchButton,
   Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock,
-  MagicStick, Search, Reading, DataAnalysis
+  MagicStick, Search, Reading, DataAnalysis,
+  Picture, Upload, Rank, Goods, DataBoard, TakeawayBox
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'

@@ -1,12 +1,12 @@
 package com.cloudbrain.service.appointment;
 
+import com.cloudbrain.CloudbrainTest;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.ScheduleCreateRequest;
 import com.cloudbrain.entity.Schedule;
 import com.cloudbrain.entity.TimeSlot;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -15,7 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@CloudbrainTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @Transactional
 class ScheduleServiceTest {
