@@ -86,6 +86,38 @@ public class UUIDUtil {
         return "DK_" + shortUuid();
     }
 
+    // ==================== M05 影像管理 ====================
+
+    public static String generateImageId() {
+        return "IMG_" + shortUuid();
+    }
+
+    public static String generateAnnotationId() {
+        return "ANN_" + shortUuid();
+    }
+
+    public static String generateStorageConfigId() {
+        return "SC_" + shortUuid();
+    }
+
+    // ==================== M07 药库管理 ====================
+
+    public static String generateDrugId() {
+        return "DRUG_" + shortUuid();
+    }
+
+    public static String generateWarehouseId() {
+        return "WH_" + shortUuid();
+    }
+
+    public static String generateShipRecordId() {
+        return "SHP_" + shortUuid();
+    }
+
+    public static String generateStockAlertId() {
+        return "SAL_" + shortUuid();
+    }
+
     private static String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
