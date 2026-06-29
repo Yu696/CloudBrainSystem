@@ -22,4 +22,10 @@ public interface ExaminationService {
 
     /** 检查结果 */
     ExaminationResultVO getResult(String orderId);
+
+    /** 检查单详情 */
+    ExaminationOrderVO getDetail(String orderId);
+
+    /** 支付检查费（患者端钱包扣款） */
+    void payOrder(String orderId);
 }
