@@ -249,7 +249,19 @@ const routes: RouteRecordRaw[] = [
         name: 'AiMonitor',
         component: () => import('@/views/admin/AiMonitorView.vue'),
         meta: { title: 'AI 调用监控', admin: true }
-      }
+      },
+      // M05 影像管理
+      { path: 'image/upload', name: 'ImageUpload', component: () => import('@/views/image/ImageUploadView.vue'), meta: { title: '影像上传' } },
+      { path: 'image/list', name: 'ImageList', component: () => import('@/views/image/ImageListView.vue'), meta: { title: '影像列表' } },
+      { path: 'image/viewer/:imageId', name: 'ImageViewer', component: () => import('@/views/image/ImageViewerView.vue'), meta: { title: '影像预览' } },
+      { path: 'image/compare', name: 'ImageCompare', component: () => import('@/views/image/ImageCompareView.vue'), meta: { title: '影像对比' } },
+
+      // M07 药库管理
+      { path: 'pharmacy/drugs', name: 'DrugList', component: () => import('@/views/pharmacy/DrugListView.vue'), meta: { title: '药品管理' } },
+      { path: 'pharmacy/drug/:drugId', name: 'DrugForm', component: () => import('@/views/pharmacy/DrugFormView.vue'), meta: { title: '药品详情' } },
+      { path: 'pharmacy/inventory', name: 'Inventory', component: () => import('@/views/pharmacy/InventoryView.vue'), meta: { title: '库存管理' } },
+      { path: 'pharmacy/dispense', name: 'Dispense', component: () => import('@/views/pharmacy/DispenseView.vue'), meta: { title: '发药管理' } },
+      { path: 'pharmacy/warehouse', name: 'Warehouse', component: () => import('@/views/pharmacy/WarehouseView.vue'), meta: { title: '仓库管理' } },
     ]
   }
 ]
