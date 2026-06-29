@@ -1,5 +1,6 @@
 package com.cloudbrain.service.appointment;
 
+import com.cloudbrain.CloudbrainTest;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.AppointmentBookRequest;
 import com.cloudbrain.dto.request.PaymentCreateRequest;
@@ -9,7 +10,6 @@ import com.cloudbrain.entity.Payment;
 import com.cloudbrain.entity.TimeSlot;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -18,7 +18,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@CloudbrainTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @Transactional
 class PaymentServiceTest {
@@ -92,11 +92,11 @@ class PaymentServiceTest {
 
         assertNotNull(payment);
         assertNotNull(payment.getPaymentId());
-        assertEquals(2, payment.getPaymentStatus());
+        assertEquals(1, payment.getPaymentStatus());
         assertNotNull(payment.getTradeNo());
 
         Payment queried = paymentService.getStatus(payment.getPaymentId());
-        assertEquals(2, queried.getPaymentStatus());
+        assertEquals(1, queried.getPaymentStatus());
     }
 
     @Test

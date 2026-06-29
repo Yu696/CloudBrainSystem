@@ -37,8 +37,11 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             throw new BusinessException("医生不存在");
         }
 
-        // 校验时段长度：不能超过班次总时长
+        // 校验时段长度：不能少于5分钟
         int slotDuration = request.getSlotDuration() != null ? request.getSlotDuration() : 30;
+        if (slotDuration < 5) {
+            throw new BusinessException("时段长度不能少于5分钟");
+        }
         long totalMinutes = java.time.Duration.between(request.getStartTime(), request.getEndTime()).toMinutes();
         if (slotDuration > totalMinutes) {
             throw new BusinessException("时段长度不能超过班次总时长（" + totalMinutes + "分钟）");
