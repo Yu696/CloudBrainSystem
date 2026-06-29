@@ -6,8 +6,10 @@ import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.entity.*;
 import com.cloudbrain.mapper.AiCallLogMapper;
+import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,9 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * AI 管理端 Controller
@@ -36,6 +37,8 @@ public class AiAdminController extends BaseController {
     private final PromptTemplateService promptTemplateService;
     private final DiseaseKbService diseaseKbService;
     private final AiCallLogMapper aiCallLogMapper;
+    private final PatientMapper patientMapper;
+    private final ObjectMapper objectMapper;
 
     // ==================== Prompt 模板管理（5 个 API） ====================
 
@@ -162,11 +165,32 @@ public class AiAdminController extends BaseController {
 
         Page<AiCallLog> pageResult = aiCallLogMapper.selectPage(mpPage, w);
 
+        // 批量查询患者姓名
+        Set<String> patientIds = pageResult.getRecords().stream()
+                .map(AiCallLog::getPatientId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, String> patientNameMap = new HashMap<>();
+        if (!patientIds.isEmpty()) {
+            patientMapper.selectList(
+                    new LambdaQueryWrapper<Patient>().in(Patient::getPatientId, patientIds)
+            ).forEach(p -> patientNameMap.put(p.getPatientId(), p.getName()));
+        }
+
+        // 转换记录，添加患者姓名
+        List<Map<String, Object>> recordList = pageResult.getRecords().stream().map(log -> {
+            Map<String, Object> record = objectMapper.convertValue(log, Map.class);
+            record.put("patientName", log.getPatientId() != null
+                    ? patientNameMap.getOrDefault(log.getPatientId(), log.getPatientId())
+                    : null);
+            return record;
+        }).collect(Collectors.toList());
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("page", page);
         result.put("pageSize", pageSize);
         result.put("total", pageResult.getTotal());
-        result.put("records", pageResult.getRecords());
+        result.put("records", recordList);
 
         return success(result);
     }
