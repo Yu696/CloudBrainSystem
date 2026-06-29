@@ -47,9 +47,19 @@ export function drugStockApi(drugId: string) {
   return request.get<any>('/drug/stock', { params: { drugId } })
 }
 
+/** 库存列表（分页） */
+export function drugStockListApi(params: {
+  warehouseId?: string
+  keyword?: string
+  page?: number
+  pageSize?: number
+}) {
+  return request.get<any>('/drug/stock/list', { params: { ...params, _t: Date.now() } })
+}
+
 /** 库存预警列表（DR-06） */
 export function lowStockAlertApi(type?: number) {
-  return request.get<any>('/drug/low-stock', { params: { type } })
+  return request.get<any>('/drug/low-stock', { params: { type, _t: Date.now() } })
 }
 
 /** 发药出库（DR-07） */
@@ -79,4 +89,44 @@ export function addWarehouseApi(data: {
   type: number
 }) {
   return request.post<any>('/drug/warehouse', data)
+}
+
+/** 标记预警已处理 */
+export function handleAlertApi(alertId: number) {
+  return request.put<any>('/drug/alert/handle', null, { params: { alertId } })
+}
+
+/** 删除预警记录 */
+export function deleteAlertApi(alertId: number) {
+  return request.delete<any>(`/drug/alert/${alertId}`)
+}
+
+/** 调整库存（正数入库，负数出库） */
+export function adjustStockApi(data: {
+  drugId: string
+  quantity: number
+  remark?: string
+  warehouseId?: string
+  batchNo?: string
+  productionDate?: string
+  expiryDate?: string
+  minStock?: number
+  maxStock?: number
+}) {
+  return request.put<any>('/drug/stock/adjust', data)
+}
+
+/** 销毁过期药品 */
+export function destroyExpiredApi(drugId: string) {
+  return request.put<any>('/drug/stock/destroy-expired', { drugId })
+}
+
+/** 库存转移 */
+export function transferStockApi(data: {
+  drugId: string
+  fromWarehouseId: string
+  toWarehouseId: string
+  quantity: number
+}) {
+  return request.put<any>('/drug/stock/transfer', data)
 }

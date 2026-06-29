@@ -2,6 +2,11 @@
 <project version="4">
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/sql/init/11-ai-data.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/sql/init/12-phase3-data.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/sql/init/13-phase3-alert-demo.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/sql/init/14-drug_stock_uk_migration.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/sql/init/15-stock_alert_warehouse.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/sql/init/16-drug_stock_batch_uk.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/seed/ai_call_log.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/seed/disease_knowledge_seed.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/seed/extend_departments.sql" dialect="MySQL" />

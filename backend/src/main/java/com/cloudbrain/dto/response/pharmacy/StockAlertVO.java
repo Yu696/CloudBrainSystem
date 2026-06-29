@@ -11,6 +11,8 @@ public class StockAlertVO {
     private Long id;
     private String drugId;
     private String drugName;
+    private String warehouseId;
+    private String warehouseName;
     private Integer alertType;
     private String alertTypeName;
     private Integer currentStock;

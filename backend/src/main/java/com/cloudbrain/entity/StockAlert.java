@@ -14,6 +14,9 @@ public class StockAlert {
     @TableField("drug_id")
     private String drugId;
 
+    @TableField("warehouse_id")
+    private String warehouseId;
+
     @TableField("alert_type")
     private Integer alertType;
 

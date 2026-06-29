@@ -41,30 +41,37 @@ public class DispenseServiceImpl implements DispenseService {
                 throw new BusinessException("药品不存在: " + item.getDrugId());
             }
 
-            // 查询库存
-            DrugStock stock = drugStockMapper.selectOne(
+            // 查询库存（多仓库下取第一个满足条件的记录）
+            List<DrugStock> stocks = drugStockMapper.selectList(
                     new LambdaQueryWrapper<DrugStock>().eq(DrugStock::getDrugId, item.getDrugId()));
-            if (stock == null) {
+            if (stocks.isEmpty()) {
                 throw new BusinessException("药品库存记录不存在: " + drug.getDrugName());
             }
 
-            // 校验药品有效期
-            if (stock.getExpiryDate() != null && stock.getExpiryDate().isBefore(LocalDate.now())) {
-                throw new BusinessException("药品已过期，无法发药: " + drug.getDrugName());
-            }
-
-            // 校验库存充足（行级乐观锁）
-            if (stock.getCurrentStock() < item.getQuantity()) {
+            // 找第一个未过期且库存充足的仓库
+            DrugStock stock = stocks.stream()
+                    .filter(s -> s.getExpiryDate() == null || !s.getExpiryDate().isBefore(LocalDate.now()))
+                    .filter(s -> s.getCurrentStock() >= item.getQuantity())
+                    .findFirst()
+                    .orElse(null);
+            if (stock == null) {
+                // 如果没有满足条件的，检查是否有未过期的但库存不足
+                boolean hasStock = stocks.stream().anyMatch(s ->
+                        s.getExpiryDate() == null || !s.getExpiryDate().isBefore(LocalDate.now()));
+                if (!hasStock) {
+                    throw new BusinessException("药品已过期，无法发药: " + drug.getDrugName());
+                }
                 throw new BusinessException("库存不足: " + drug.getDrugName()
-                        + "，需要 " + item.getQuantity() + "，当前库存 " + stock.getCurrentStock());
+                        + "，需要 " + item.getQuantity());
             }
 
-            // 扣减库存（乐观锁：UPDATE drug_stock SET current_stock = current_stock - ? WHERE drug_id = ? AND current_stock >= ?）
+            // 扣减库存（按 warehouse_id 精确更新）
             DrugStock updateEntity = new DrugStock();
             updateEntity.setCurrentStock(stock.getCurrentStock() - item.getQuantity());
             int affected = drugStockMapper.update(updateEntity,
                     new LambdaUpdateWrapper<DrugStock>()
                             .eq(DrugStock::getDrugId, item.getDrugId())
+                            .eq(DrugStock::getWarehouseId, stock.getWarehouseId())
                             .ge(DrugStock::getCurrentStock, item.getQuantity()));
             if (affected == 0) {
                 throw new BusinessException("药品库存扣减失败，请重试: " + drug.getDrugName());
@@ -73,18 +80,28 @@ public class DispenseServiceImpl implements DispenseService {
             totalShipNum += item.getQuantity();
             totalPayAmount = totalPayAmount.add(drug.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
 
-            // 发药后检查库存是否低于预警线
+            // 发药后检查该仓库库存是否低于预警线
             int newStock = stock.getCurrentStock() - item.getQuantity();
             if (newStock <= stock.getMinStock()) {
-                StockAlert alert = new StockAlert();
-                alert.setDrugId(item.getDrugId());
-                alert.setAlertType(0);
-                alert.setCurrentStock(newStock);
-                alert.setThreshold(stock.getMinStock());
-                alert.setAlertMessage(drug.getDrugName() + "库存低于预警线（当前: "
-                        + newStock + "，预警线: " + stock.getMinStock() + "）");
-                alert.setIsHandled(0);
-                stockAlertMapper.insert(alert);
+                // 避免重复生成
+                Long existingCount = stockAlertMapper.selectCount(
+                        new LambdaQueryWrapper<StockAlert>()
+                                .eq(StockAlert::getDrugId, item.getDrugId())
+                                .eq(StockAlert::getWarehouseId, stock.getWarehouseId())
+                                .eq(StockAlert::getAlertType, 0)
+                                .eq(StockAlert::getIsHandled, 0));
+                if (existingCount == 0) {
+                    StockAlert alert = new StockAlert();
+                    alert.setDrugId(item.getDrugId());
+                    alert.setWarehouseId(stock.getWarehouseId());
+                    alert.setAlertType(0);
+                    alert.setCurrentStock(newStock);
+                    alert.setThreshold(stock.getMinStock());
+                    alert.setAlertMessage(drug.getDrugName() + "库存低于预警线（当前: "
+                            + newStock + "，预警线: " + stock.getMinStock() + "）");
+                    alert.setIsHandled(0);
+                    stockAlertMapper.insert(alert);
+                }
             }
         }
 

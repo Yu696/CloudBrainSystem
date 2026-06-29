@@ -7,11 +7,14 @@ const request = axios.create({
   timeout: 30000
 })
 
-// 请求拦截器：自动携带 JWT
+// 请求拦截器：自动携带 JWT + 防 GET 缓存
 request.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  if (config.method === 'get') {
+    config.headers['Cache-Control'] = 'no-cache, no-store'
   }
   return config
 })

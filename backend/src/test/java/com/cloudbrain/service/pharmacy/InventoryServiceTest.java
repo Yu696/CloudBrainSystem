@@ -61,7 +61,7 @@ class InventoryServiceTest {
     @Test
     @DisplayName("按仓库查询库存列表")
     void testListByWarehouse() {
-        var result = inventoryService.listByWarehouse("WH_001", 1, 10);
+        var result = inventoryService.listByWarehouse("WH_001", null, 1, 10);
         assertNotNull(result);
         assertTrue(result.getTotal() > 0);
         assertEquals("WH_001", result.getRecords().get(0).getWarehouseId());
