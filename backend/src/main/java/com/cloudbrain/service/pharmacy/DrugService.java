@@ -2,6 +2,7 @@ package com.cloudbrain.service.pharmacy;
 
 import com.cloudbrain.dto.request.pharmacy.DrugAddRequest;
 import com.cloudbrain.dto.request.pharmacy.DrugUpdateRequest;
+import java.util.List;
 import com.cloudbrain.dto.PageResult;
 import com.cloudbrain.dto.response.pharmacy.DrugVO;
 
@@ -21,4 +22,7 @@ public interface DrugService {
 
     /** 药品详情 */
     DrugVO getDetail(String drugId);
+
+    /** 获取所有可用药品 */
+    List<DrugVO> all();
 }
