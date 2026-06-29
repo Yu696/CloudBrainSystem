@@ -3,8 +3,10 @@ package com.cloudbrain.controller.ai;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cloudbrain.common.exception.BusinessException;
+import com.cloudbrain.config.TestDataSourceConfig;
 import com.cloudbrain.entity.*;
 import com.cloudbrain.mapper.AiCallLogMapper;
+import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.service.ai.AiService;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
@@ -13,8 +15,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.test.web.servlet.MockMvc;
@@ -47,11 +48,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AiAdminControllerTest {
 
     @Configuration
+    @Import(TestDataSourceConfig.class)
     @EnableAutoConfiguration(exclude = {
             SecurityAutoConfiguration.class,
-            SecurityFilterAutoConfiguration.class,
-            DataSourceAutoConfiguration.class,
-            DataSourceTransactionManagerAutoConfiguration.class
+            SecurityFilterAutoConfiguration.class
     })
     @ComponentScan(
             basePackages = {"com.cloudbrain.controller.ai", "com.cloudbrain.common"},
@@ -74,6 +74,9 @@ class AiAdminControllerTest {
 
     @MockBean
     private AiCallLogMapper aiCallLogMapper;
+
+    @MockBean
+    private PatientMapper patientMapper;
 
     private static final String TEMPLATE_ID = "PTMP_0000000000000001";
 
