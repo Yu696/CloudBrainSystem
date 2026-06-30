@@ -42,7 +42,6 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
     private final ExaminationResultMapper examinationResultMapper;
     private final PatientMapper patientMapper;
     private final WalletTransactionMapper walletTxMapper;
-    private final PatientMapper patientMapper;
     private final MedicalImageMapper medicalImageMapper;
     private final DoctorMapper doctorMapper;
 
@@ -163,7 +162,7 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
     public List<ExaminationOrderVO> listImagingOrders(String doctorId) {
         LambdaQueryWrapper<ExaminationOrder> wrapper = new LambdaQueryWrapper<ExaminationOrder>()
                 .eq(ExaminationOrder::getExamCategory, 1) // 影像学检查
-                .in(ExaminationOrder::getStatus, 0, 1, 2) // 已开单、已缴费、检查中
+                .in(ExaminationOrder::getStatus, 0, 1, 2, 3) // 已开单、已缴费、检查中、已完成
                 .orderByDesc(ExaminationOrder::getCreateTime);
         if (doctorId != null && !doctorId.isBlank()) {
             wrapper.eq(ExaminationOrder::getDoctorId, doctorId);

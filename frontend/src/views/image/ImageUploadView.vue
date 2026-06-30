@@ -31,6 +31,14 @@
           <el-tag size="small" :type="examStatusTag">{{ examStatusText }}</el-tag>
         </div>
       </div>
+      <el-alert
+        v-if="examOrder.status !== 1"
+        :title="examOrder.status === 2 ? '该检查单已有影像上传，如确需补充请联系管理员' : '该检查单尚未缴费，请先完成缴费后再上传影像'"
+        :type="examOrder.status === 2 ? 'info' : 'error'"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px;"
+      />
     </div>
 
     <div class="upload-content">
@@ -99,7 +107,7 @@
         <el-button
           type="primary"
           :loading="uploading"
-          :disabled="fileList.length !== 1"
+          :disabled="fileList.length !== 1 || uploadDisabled"
           @click="handleSingleUpload"
         >
           <el-icon><Upload /></el-icon>
@@ -108,7 +116,7 @@
         <el-button
           type="success"
           :loading="batchUploading"
-          :disabled="fileList.length < 2"
+          :disabled="fileList.length < 2 || uploadDisabled"
           @click="handleBatchUpload"
         >
           <el-icon><Upload /></el-icon>
@@ -213,6 +221,7 @@ const examStatusTagMap: Record<number, '' | 'warning' | 'success' | 'info' | 'da
 }
 const examStatusText = computed(() => examStatusMap[examOrder.value?.status] || '')
 const examStatusTag = computed(() => examStatusTagMap[examOrder.value?.status] || 'info')
+const uploadDisabled = computed(() => examOrder.value != null && examOrder.value.status !== 1)
 
 onMounted(() => {
   if (orderIdFromRoute.value) {
@@ -355,6 +364,11 @@ async function handleSingleUpload() {
     })
     ElMessage.success(`文件 "${file.name}" 上传成功`)
 
+    // 上传成功后更新检查单状态为"检查中"
+    if (examOrder.value && examOrder.value.status === 1) {
+      examOrder.value.status = 2
+    }
+
     // 从列表中移除已上传的文件
     removeFileFromList(uploadFile.uid)
   } catch (err: any) {
@@ -414,6 +428,11 @@ async function handleBatchUpload() {
       })
     })
     ElMessage.success(`批量上传成功，共 ${resultArray.length} 个文件`)
+
+    // 上传成功后更新检查单状态为"检查中"
+    if (examOrder.value && examOrder.value.status === 1) {
+      examOrder.value.status = 2
+    }
 
     // 清空文件列表
     fileList.value = []

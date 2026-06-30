@@ -9,6 +9,7 @@
         <el-radio-button value="0">已开单</el-radio-button>
         <el-radio-button value="1">已缴费</el-radio-button>
         <el-radio-button value="2">检查中</el-radio-button>
+        <el-radio-button value="3">已完成</el-radio-button>
       </el-radio-group>
     </div>
 
@@ -42,10 +43,13 @@
           </el-table-column>
           <el-table-column label="操作" width="120" align="center" fixed="right">
             <template #default="{ row }">
-              <el-button type="primary" size="small" @click="goUpload(row)">
+              <el-button v-if="row.status === 1" type="primary" size="small" @click="goUpload(row)">
                 <el-icon><Upload /></el-icon>
                 上传影像
               </el-button>
+              <el-tag v-else-if="row.status === 2" type="info" size="small">检查中</el-tag>
+              <el-tag v-else-if="row.status === 3" type="success" size="small">已完成</el-tag>
+              <el-tag v-else type="warning" size="small">待缴费</el-tag>
             </template>
           </el-table-column>
         </el-table>

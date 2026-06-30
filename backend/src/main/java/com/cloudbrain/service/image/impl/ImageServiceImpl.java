@@ -59,6 +59,21 @@ public class ImageServiceImpl implements ImageService {
         image.setStatus(1);
         medicalImageMapper.insert(image);
 
+        // 状态流转：已缴费(1) → 检查中(2)；仅已缴费或检查中的检查单可上传影像
+        if (examinationId != null && !examinationId.isBlank()) {
+            ExaminationOrder order = examinationOrderMapper.selectOne(
+                    new LambdaQueryWrapper<ExaminationOrder>()
+                            .eq(ExaminationOrder::getOrderId, examinationId));
+            if (order != null) {
+                if (order.getStatus() == 1) {
+                    order.setStatus(2);
+                    examinationOrderMapper.updateById(order);
+                } else if (order.getStatus() != 2) {
+                    throw new BusinessException("该检查单状态不允许上传影像，仅已缴费的检查单可上传");
+                }
+            }
+        }
+
         return ImageVO.fromEntity(image);
     }
 
