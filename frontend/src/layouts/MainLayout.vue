@@ -279,8 +279,7 @@ import {
   Fold, Expand, ArrowDown, SwitchButton,
   Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock,
   MagicStick, Search, Reading, DataAnalysis,
-  Picture, Goods, DataBoard, TakeawayBox, Notebook
-  Picture, Upload, Rank, Goods, DataBoard, TakeawayBox, Wallet
+  Picture, Upload, Rank, Goods, DataBoard, TakeawayBox, Notebook, Wallet
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'
