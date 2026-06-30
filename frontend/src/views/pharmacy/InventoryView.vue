@@ -533,6 +533,7 @@ async function handleStockConfirm() {
 }
 
 async function handleAlertAdjust(row: any) {
+  await loadStockList()
   dialogType.value = row.alertType as 0 | 1 | 2
   adjustForm.drugId = row.drugId
   adjustForm.currentStock = row.currentStock
