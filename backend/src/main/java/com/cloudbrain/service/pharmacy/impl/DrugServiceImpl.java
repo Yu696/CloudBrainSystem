@@ -8,11 +8,7 @@ import com.cloudbrain.dto.request.pharmacy.DrugAddRequest;
 import com.cloudbrain.dto.request.pharmacy.DrugUpdateRequest;
 import com.cloudbrain.dto.response.pharmacy.DrugVO;
 import com.cloudbrain.entity.Drug;
-import com.cloudbrain.entity.DrugStock;
-import com.cloudbrain.entity.Warehouse;
 import com.cloudbrain.mapper.DrugMapper;
-import com.cloudbrain.mapper.DrugStockMapper;
-import com.cloudbrain.mapper.WarehouseMapper;
 import com.cloudbrain.service.pharmacy.DrugService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +23,6 @@ import java.util.List;
 public class DrugServiceImpl implements DrugService {
 
     private final DrugMapper drugMapper;
-    private final DrugStockMapper drugStockMapper;
-    private final WarehouseMapper warehouseMapper;
 
     @Override
     @Transactional
@@ -61,21 +55,6 @@ public class DrugServiceImpl implements DrugService {
         drug.setPrescriptionType(request.getPrescriptionType());
         drug.setStatus(1);
         drugMapper.insert(drug);
-
-        // 新增药品的同时创建库存记录，初始库存为 0
-        // 查找默认仓库，优先使用第一个启用状态的仓库
-        Warehouse defaultWh = warehouseMapper.selectOne(
-                new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getStatus, 1).last("LIMIT 1"));
-        String warehouseId = defaultWh != null ? defaultWh.getWarehouseId() : "WH_001";
-
-        DrugStock stock = new DrugStock();
-        stock.setDrugId(drug.getDrugId());
-        stock.setWarehouseId(warehouseId);
-        stock.setCurrentStock(0);
-        stock.setMinStock(10);
-        stock.setMaxStock(1000);
-        stock.setStatus(1);
-        drugStockMapper.insert(stock);
 
         return drug.getDrugId();
     }

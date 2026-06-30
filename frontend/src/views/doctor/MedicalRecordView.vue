@@ -122,6 +122,17 @@
                     <el-table-column prop="frequency" label="频次" width="70" />
                     <el-table-column prop="days" label="天数" width="50" />
                   </el-table>
+                  <div v-if="pres.items?.length" class="presc-notes">
+                    <template v-for="item in pres.items" :key="item.itemId">
+                      <div v-if="item.cautiousCrowd || item.sideEffects" class="presc-note-item">
+                        <el-icon><WarningFilled /></el-icon>
+                        <span><strong>{{ item.drugName }}：</strong></span>
+                        <span v-if="item.cautiousCrowd">禁忌人群：{{ item.cautiousCrowd }}</span>
+                        <span v-if="item.cautiousCrowd && item.sideEffects"> | </span>
+                        <span v-if="item.sideEffects">不良反应：{{ item.sideEffects }}</span>
+                      </div>
+                    </template>
+                  </div>
                   <div v-if="!pres.items?.length" class="pres-empty">暂无药品明细</div>
                 </div>
               </div>
@@ -223,7 +234,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Select, MagicStick, Edit, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Select, MagicStick, Edit, Delete, WarningFilled } from '@element-plus/icons-vue'
 import { createMedicalRecordApi, updateMedicalRecordApi, completeMedicalRecordApi, getMedicalRecordDetailApi, listMedicalRecordsApi, listPrescriptionsApi, getPrescriptionDetailApi, listExaminationOrdersApi, getExaminationResultApi, deletePrescriptionApi, deleteExaminationOrderApi } from '@/api/medical'
 import { getAppointmentDetailApi, getMyDoctorInfoApi } from '@/api/appointment'
 import { getPatientInfoApi } from '@/api/patient'
@@ -708,6 +719,25 @@ function goReport() {
   font-size: 12px;
   color: var(--cb-text-placeholder);
   padding: 8px 0;
+}
+
+.presc-notes {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.presc-note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-color-warning);
+  padding: 4px 8px;
+  background: var(--el-color-warning-light-9);
+  border-radius: var(--cb-radius-sm);
 }
 
 /* 检查结果 */
