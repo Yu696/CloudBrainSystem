@@ -83,14 +83,13 @@ public class DispenseServiceImpl implements DispenseService {
             // 发药后检查该仓库库存是否低于预警线
             int newStock = stock.getCurrentStock() - item.getQuantity();
             if (newStock <= stock.getMinStock()) {
-                // 避免重复生成
-                Long existingCount = stockAlertMapper.selectCount(
+                boolean alreadyExists = stockAlertMapper.selectCount(
                         new LambdaQueryWrapper<StockAlert>()
                                 .eq(StockAlert::getDrugId, item.getDrugId())
                                 .eq(StockAlert::getWarehouseId, stock.getWarehouseId())
                                 .eq(StockAlert::getAlertType, 0)
-                                .eq(StockAlert::getIsHandled, 0));
-                if (existingCount == 0) {
+                                .eq(StockAlert::getIsHandled, 0)) > 0;
+                if (!alreadyExists) {
                     StockAlert alert = new StockAlert();
                     alert.setDrugId(item.getDrugId());
                     alert.setWarehouseId(stock.getWarehouseId());

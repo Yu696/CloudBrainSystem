@@ -117,8 +117,8 @@ export function adjustStockApi(data: {
 }
 
 /** 销毁过期药品 */
-export function destroyExpiredApi(drugId: string) {
-  return request.put<any>('/drug/stock/destroy-expired', { drugId })
+export function destroyExpiredApi(drugId: string, warehouseId?: string, batchNo?: string) {
+  return request.put<any>('/drug/stock/destroy-expired', { drugId, warehouseId, batchNo })
 }
 
 /** 库存转移 */
@@ -127,6 +127,7 @@ export function transferStockApi(data: {
   fromWarehouseId: string
   toWarehouseId: string
   quantity: number
+  batchNo?: string
 }) {
   return request.put<any>('/drug/stock/transfer', data)
 }

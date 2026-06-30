@@ -17,6 +17,9 @@ public class StockAlert {
     @TableField("warehouse_id")
     private String warehouseId;
 
+    @TableField("batch_no")
+    private String batchNo;
+
     @TableField("alert_type")
     private Integer alertType;
 

@@ -26,7 +26,7 @@ public interface InventoryService {
                      LocalDate productionDate, LocalDate expiryDate, Integer minStock, Integer maxStock);
 
     /** 销毁过期药品（库存置 0） */
-    void destroyExpired(String drugId);
+    void destroyExpired(String drugId, String warehouseId, String batchNo);
 
     /** 删除预警记录 */
     void deleteAlert(Long alertId);

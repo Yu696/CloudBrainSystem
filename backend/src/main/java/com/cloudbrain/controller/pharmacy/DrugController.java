@@ -116,7 +116,7 @@ public class DrugController extends BaseController {
     @Operation(summary = "销毁过期药品（库存置 0）")
     @PutMapping("/stock/destroy-expired")
     public Result<String> destroyExpired(@Valid @RequestBody DestroyExpiredRequest request) {
-        inventoryService.destroyExpired(request.getDrugId());
+        inventoryService.destroyExpired(request.getDrugId(), request.getWarehouseId(), request.getBatchNo());
         return success("销毁成功");
     }
 

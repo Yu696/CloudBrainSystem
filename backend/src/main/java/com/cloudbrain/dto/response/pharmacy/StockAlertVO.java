@@ -13,6 +13,7 @@ public class StockAlertVO {
     private String drugName;
     private String warehouseId;
     private String warehouseName;
+    private String batchNo;
     private Integer alertType;
     private String alertTypeName;
     private Integer currentStock;

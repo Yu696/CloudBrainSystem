@@ -35,9 +35,10 @@ public class InventoryServiceImpl implements InventoryService {
     private final WarehouseMapper warehouseMapper;
     private final StockAlertMapper stockAlertMapper;
 
+    // ==================== 查询 ====================
+
     @Override
     public StockVO getStock(String drugId) {
-        // 多仓库下返回第一个匹配的记录
         List<DrugStock> stocks = drugStockMapper.selectList(
                 new LambdaQueryWrapper<DrugStock>().eq(DrugStock::getDrugId, drugId));
         if (stocks.isEmpty()) {
@@ -71,6 +72,56 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    public PageResult<StockVO> listByWarehouse(String warehouseId, String keyword, int page, int pageSize) {
+        LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<>();
+        if (warehouseId != null && !warehouseId.isBlank()) {
+            wrapper.eq(DrugStock::getWarehouseId, warehouseId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            List<Drug> matchedDrugs = drugMapper.selectList(
+                    new LambdaQueryWrapper<Drug>()
+                            .like(Drug::getDrugId, keyword)
+                            .or().like(Drug::getDrugName, keyword)
+                            .or().like(Drug::getDrugCode, keyword));
+            if (matchedDrugs.isEmpty()) {
+                return PageResult.of(0, page, pageSize, List.of());
+            }
+            wrapper.in(DrugStock::getDrugId, matchedDrugs.stream().map(Drug::getDrugId).toList());
+        }
+        wrapper.orderByDesc(DrugStock::getUpdateTime);
+
+        Page<DrugStock> result = drugStockMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        List<StockVO> records = new ArrayList<>();
+        for (DrugStock stock : result.getRecords()) {
+            Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, stock.getDrugId()));
+            String warehouseName = null;
+            if (stock.getWarehouseId() != null) {
+                Warehouse wh = warehouseMapper.selectOne(
+                        new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, stock.getWarehouseId()));
+                if (wh != null) warehouseName = wh.getName();
+            }
+            records.add(StockVO.builder()
+                    .drugId(stock.getDrugId())
+                    .drugName(drug != null ? drug.getDrugName() : null)
+                    .warehouseId(stock.getWarehouseId())
+                    .warehouseName(warehouseName)
+                    .currentStock(stock.getCurrentStock())
+                    .minStock(stock.getMinStock())
+                    .maxStock(stock.getMaxStock())
+                    .batchNo(stock.getBatchNo())
+                    .productionDate(stock.getProductionDate())
+                    .expiryDate(stock.getExpiryDate())
+                    .status(stock.getStatus())
+                    .createTime(stock.getCreateTime())
+                    .updateTime(stock.getUpdateTime())
+                    .build());
+        }
+        return PageResult.of(result.getTotal(), page, pageSize, records);
+    }
+
+    // ==================== 库存预警列表 ====================
+
+    @Override
     public List<StockAlertVO> listAlerts(Integer type) {
         LambdaQueryWrapper<StockAlert> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(StockAlert::getIsHandled, 0);
@@ -98,32 +149,15 @@ public class InventoryServiceImpl implements InventoryService {
         List<StockAlertVO> result = new ArrayList<>();
         for (StockAlert alert : alerts) {
             Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, alert.getDrugId()));
-            // 取实时库存（有 warehouse_id 则查该仓，否则查总库存）
-            Integer realStock;
-            if (alert.getWarehouseId() != null) {
-                List<DrugStock> whStocks = drugStockMapper.selectList(
-                        new LambdaQueryWrapper<DrugStock>()
-                                .eq(DrugStock::getDrugId, alert.getDrugId())
-                                .eq(DrugStock::getWarehouseId, alert.getWarehouseId()));
-                realStock = whStocks.stream().mapToInt(DrugStock::getCurrentStock).sum();
-            } else {
-                List<DrugStock> allStocks = drugStockMapper.selectList(
-                        new LambdaQueryWrapper<DrugStock>().eq(DrugStock::getDrugId, alert.getDrugId()));
-                realStock = allStocks.stream().mapToInt(DrugStock::getCurrentStock).sum();
-            }
-            // 查仓库名称
-            String warehouseName = null;
-            if (alert.getWarehouseId() != null) {
-                Warehouse wh = warehouseMapper.selectOne(
-                        new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, alert.getWarehouseId()));
-                if (wh != null) warehouseName = wh.getName();
-            }
+            Integer realStock = getTotalStock(alert.getDrugId(), alert.getWarehouseId());
+            String warehouseName = getWarehouseName(alert.getWarehouseId());
             result.add(StockAlertVO.builder()
                     .id(alert.getId())
                     .drugId(alert.getDrugId())
                     .drugName(drug != null ? drug.getDrugName() : null)
                     .warehouseId(alert.getWarehouseId())
                     .warehouseName(warehouseName)
+                    .batchNo(alert.getBatchNo())
                     .alertType(alert.getAlertType())
                     .alertTypeName(StockAlertVO.alertTypeName(alert.getAlertType()))
                     .currentStock(realStock)
@@ -142,17 +176,13 @@ public class InventoryServiceImpl implements InventoryService {
                 if (alertedKeys.contains(key)) continue;
 
                 Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, es.getDrugId()));
-                String warehouseName = null;
-                if (es.getWarehouseId() != null) {
-                    Warehouse wh = warehouseMapper.selectOne(
-                            new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, es.getWarehouseId()));
-                    if (wh != null) warehouseName = wh.getName();
-                }
+                String warehouseName = getWarehouseName(es.getWarehouseId());
                 result.add(StockAlertVO.builder()
                         .drugId(es.getDrugId())
                         .drugName(drug != null ? drug.getDrugName() : null)
                         .warehouseId(es.getWarehouseId())
                         .warehouseName(warehouseName)
+                        .batchNo(es.getBatchNo())
                         .alertType(1)
                         .alertTypeName(StockAlertVO.alertTypeName(1))
                         .currentStock(es.getCurrentStock())
@@ -165,6 +195,8 @@ public class InventoryServiceImpl implements InventoryService {
         }
         return result;
     }
+
+    // ==================== 预警处理 ====================
 
     @Override
     @Transactional
@@ -200,6 +232,8 @@ public class InventoryServiceImpl implements InventoryService {
             drugStockMapper.delete(dw);
         }
     }
+
+    // ==================== 库存调整 ====================
 
     @Override
     @Transactional
@@ -290,85 +324,45 @@ public class InventoryServiceImpl implements InventoryService {
 
         // ===== 按仓库汇总库存判断预警 =====
         String alertWhId = stock.getWarehouseId();
-        int totalStock = drugStockMapper.selectList(
-                new LambdaQueryWrapper<DrugStock>()
-                        .eq(DrugStock::getDrugId, drugId)
-                        .eq(alertWhId != null, DrugStock::getWarehouseId, alertWhId)
-                        .isNull(alertWhId == null, DrugStock::getWarehouseId))
-                .stream().mapToInt(DrugStock::getCurrentStock).sum();
+        int totalStock = getTotalStock(drugId, alertWhId);
 
-        LambdaQueryWrapper<StockAlert> alertWrapper = new LambdaQueryWrapper<StockAlert>()
-                .eq(StockAlert::getDrugId, drugId)
-                .eq(StockAlert::getIsHandled, 0);
-        if (alertWhId != null) {
-            alertWrapper.eq(StockAlert::getWarehouseId, alertWhId);
-        } else {
-            alertWrapper.isNull(StockAlert::getWarehouseId);
-        }
-        List<StockAlert> existingAlerts = stockAlertMapper.selectList(alertWrapper);
+        autoResolveAlerts(drugId, alertWhId, totalStock);
 
-        for (StockAlert alert : existingAlerts) {
-            alert.setCurrentStock(totalStock);
-            if (alert.getAlertType() == 0 && totalStock > alert.getThreshold()) {
-                alert.setIsHandled(1);
-                alert.setHandleTime(LocalDateTime.now());
-            }
-            if (alert.getAlertType() == 2 && totalStock <= alert.getThreshold()) {
-                alert.setIsHandled(1);
-                alert.setHandleTime(LocalDateTime.now());
-            }
-            stockAlertMapper.updateById(alert);
-        }
+        List<StockAlert> unhandled = getUnhandledAlerts(drugId, alertWhId);
 
-        // 重新查一遍未处理的，排除刚被自动解除的记录
-        List<StockAlert> unhandled = stockAlertMapper.selectList(alertWrapper);
-
-        // 低库存预警（按仓库总库存判断）
         if (totalStock <= stock.getMinStock()) {
             boolean alreadyExists = unhandled.stream().anyMatch(a -> a.getAlertType() == 0);
             if (!alreadyExists) {
-                StockAlert alert = new StockAlert();
-                alert.setDrugId(drugId);
-                alert.setWarehouseId(alertWhId);
-                alert.setAlertType(0);
-                alert.setCurrentStock(totalStock);
-                alert.setThreshold(stock.getMinStock());
-                Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
-                String whTag = alertWhId != null ? "（仓库: " + alertWhId + "）" : "";
-                alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + whTag + "库存低于预警线（当前: " + totalStock + "，预警线: " + stock.getMinStock() + "）");
-                alert.setIsHandled(0);
-                stockAlertMapper.insert(alert);
+                createLowStockAlert(drugId, alertWhId, batchNo, totalStock, stock.getMinStock());
             }
         }
-        // 库存积压预警（按仓库总库存判断）
-        if (stock.getMaxStock() != null && totalStock > stock.getMaxStock()) {
-            boolean alreadyExists = unhandled.stream().anyMatch(a -> a.getAlertType() == 2);
-            if (!alreadyExists) {
-                StockAlert alert = new StockAlert();
-                alert.setDrugId(drugId);
-                alert.setWarehouseId(alertWhId);
-                alert.setAlertType(2);
-                alert.setCurrentStock(totalStock);
-                alert.setThreshold(stock.getMaxStock());
-                Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
-                String whTag = alertWhId != null ? "（仓库: " + alertWhId + "）" : "";
-                alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + whTag + "库存积压（当前: " + totalStock + "，上限: " + stock.getMaxStock() + "）");
-                alert.setIsHandled(0);
-                stockAlertMapper.insert(alert);
+        if (stock.getMaxStock() != null) {
+            int totalMaxStock = getTotalMaxStock(drugId, alertWhId);
+            if (totalStock > totalMaxStock) {
+                boolean alreadyExists = unhandled.stream().anyMatch(a -> a.getAlertType() == 2);
+                if (!alreadyExists) {
+                    createOverStockAlert(drugId, alertWhId, batchNo, totalStock, totalMaxStock);
+                }
             }
         }
     }
 
+    // ==================== 过期销毁 ====================
+
     @Override
     @Transactional
-    public void destroyExpired(String drugId) {
+    public void destroyExpired(String drugId, String warehouseId, String batchNo) {
         LocalDate today = LocalDate.now();
-        // 只查已过期的批次
-        List<DrugStock> expired = drugStockMapper.selectList(
-                new LambdaQueryWrapper<DrugStock>()
-                        .eq(DrugStock::getDrugId, drugId)
-                        .lt(DrugStock::getExpiryDate, today)
-                        .orderByAsc(DrugStock::getExpiryDate));
+        LambdaQueryWrapper<DrugStock> query = new LambdaQueryWrapper<DrugStock>()
+                .eq(DrugStock::getDrugId, drugId)
+                .lt(DrugStock::getExpiryDate, today);
+        if (warehouseId != null && !warehouseId.isBlank()) {
+            query.eq(DrugStock::getWarehouseId, warehouseId);
+        }
+        if (batchNo != null && !batchNo.isBlank()) {
+            query.eq(DrugStock::getBatchNo, batchNo);
+        }
+        List<DrugStock> expired = drugStockMapper.selectList(query.orderByAsc(DrugStock::getExpiryDate));
         if (expired.isEmpty()) {
             throw new BusinessException("该药品暂无过期库存");
         }
@@ -391,28 +385,15 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         // 销毁后按仓库触发低库存预警
-        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
         for (DrugStock stock : expired) {
-            List<StockAlert> existing = stockAlertMapper.selectList(
-                    new LambdaQueryWrapper<StockAlert>()
-                            .eq(StockAlert::getDrugId, drugId)
-                            .eq(StockAlert::getWarehouseId, stock.getWarehouseId())
-                            .eq(StockAlert::getAlertType, 0)
-                            .eq(StockAlert::getIsHandled, 0));
+            List<StockAlert> existing = getUnhandledAlertsByType(drugId, stock.getWarehouseId(), 0);
             if (!existing.isEmpty()) continue;
 
-            StockAlert lowStock = new StockAlert();
-            lowStock.setDrugId(drugId);
-            lowStock.setWarehouseId(stock.getWarehouseId());
-            lowStock.setAlertType(0);
-            lowStock.setCurrentStock(0);
-            lowStock.setThreshold(stock.getMinStock());
-            String whTag = stock.getWarehouseId() != null ? "（仓库: " + stock.getWarehouseId() + "）" : "";
-            lowStock.setAlertMessage((drug != null ? drug.getDrugName() : "") + whTag + "库存低于预警线（当前: 0，预警线: " + stock.getMinStock() + "）");
-            lowStock.setIsHandled(0);
-            stockAlertMapper.insert(lowStock);
+            createLowStockAlert(drugId, stock.getWarehouseId(), stock.getBatchNo(), 0, stock.getMinStock());
         }
     }
+
+    // ==================== 库存转移 ====================
 
     @Override
     @Transactional
@@ -462,95 +443,147 @@ public class InventoryServiceImpl implements InventoryService {
         // 3. 源仓库扣减后检查是否触发低库存预警
         int sourceNewStock = source.getCurrentStock();
         if (sourceNewStock <= source.getMinStock()) {
-            List<StockAlert> existingSource = stockAlertMapper.selectList(
-                    new LambdaQueryWrapper<StockAlert>()
-                            .eq(StockAlert::getDrugId, drugId)
-                            .eq(StockAlert::getWarehouseId, fromWarehouseId)
-                            .eq(StockAlert::getAlertType, 0)
-                            .eq(StockAlert::getIsHandled, 0));
+            List<StockAlert> existingSource = getUnhandledAlertsByType(drugId, fromWarehouseId, 0);
             if (existingSource.isEmpty()) {
-                Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
-                StockAlert alert = new StockAlert();
-                alert.setDrugId(drugId);
-                alert.setWarehouseId(fromWarehouseId);
-                alert.setAlertType(0);
-                alert.setCurrentStock(sourceNewStock);
-                alert.setThreshold(source.getMinStock());
-                alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + "（仓库: " + fromWarehouseId + "）库存低于预警线（当前: " + sourceNewStock + "，预警线: " + source.getMinStock() + "）");
-                alert.setIsHandled(0);
-                stockAlertMapper.insert(alert);
+                createLowStockAlert(drugId, fromWarehouseId, source.getBatchNo(), sourceNewStock, source.getMinStock());
             }
         }
 
         // 4. 目标仓库增加后检查是否触发库存积压预警
         int targetNewStock = target.getCurrentStock();
-        if (target.getMaxStock() != null && targetNewStock > target.getMaxStock()) {
-            List<StockAlert> existingTarget = stockAlertMapper.selectList(
-                    new LambdaQueryWrapper<StockAlert>()
-                            .eq(StockAlert::getDrugId, drugId)
-                            .eq(StockAlert::getWarehouseId, toWarehouseId)
-                            .eq(StockAlert::getAlertType, 2)
-                            .eq(StockAlert::getIsHandled, 0));
-            if (existingTarget.isEmpty()) {
-                Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
-                StockAlert alert = new StockAlert();
-                alert.setDrugId(drugId);
-                alert.setWarehouseId(toWarehouseId);
-                alert.setAlertType(2);
-                alert.setCurrentStock(targetNewStock);
-                alert.setThreshold(target.getMaxStock());
-                alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + "（仓库: " + toWarehouseId + "）库存积压（当前: " + targetNewStock + "，上限: " + target.getMaxStock() + "）");
-                alert.setIsHandled(0);
-                stockAlertMapper.insert(alert);
+        if (target.getMaxStock() != null) {
+            int totalMaxStock = getTotalMaxStock(drugId, toWarehouseId);
+            if (targetNewStock > totalMaxStock) {
+                List<StockAlert> existingTarget = getUnhandledAlertsByType(drugId, toWarehouseId, 2);
+                if (existingTarget.isEmpty()) {
+                    createOverStockAlert(drugId, toWarehouseId, target.getBatchNo(), targetNewStock, totalMaxStock);
+                }
             }
         }
     }
 
-    @Override
-    public PageResult<StockVO> listByWarehouse(String warehouseId, String keyword, int page, int pageSize) {
-        LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<>();
-        if (warehouseId != null && !warehouseId.isBlank()) {
-            wrapper.eq(DrugStock::getWarehouseId, warehouseId);
-        }
-        if (keyword != null && !keyword.isBlank()) {
-            List<Drug> matchedDrugs = drugMapper.selectList(
-                    new LambdaQueryWrapper<Drug>()
-                            .like(Drug::getDrugId, keyword)
-                            .or().like(Drug::getDrugName, keyword)
-                            .or().like(Drug::getDrugCode, keyword));
-            if (matchedDrugs.isEmpty()) {
-                return PageResult.of(0, page, pageSize, List.of());
-            }
-            wrapper.in(DrugStock::getDrugId, matchedDrugs.stream().map(Drug::getDrugId).toList());
-        }
-        wrapper.orderByDesc(DrugStock::getUpdateTime);
+    // ==================== 私有辅助方法 ====================
 
-        Page<DrugStock> result = drugStockMapper.selectPage(new Page<>(page, pageSize), wrapper);
-        List<StockVO> records = new ArrayList<>();
-        for (DrugStock stock : result.getRecords()) {
-            Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, stock.getDrugId()));
-            String warehouseName = null;
-            if (stock.getWarehouseId() != null) {
-                Warehouse wh = warehouseMapper.selectOne(
-                        new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, stock.getWarehouseId()));
-                if (wh != null) warehouseName = wh.getName();
-            }
-            records.add(StockVO.builder()
-                    .drugId(stock.getDrugId())
-                    .drugName(drug != null ? drug.getDrugName() : null)
-                    .warehouseId(stock.getWarehouseId())
-                    .warehouseName(warehouseName)
-                    .currentStock(stock.getCurrentStock())
-                    .minStock(stock.getMinStock())
-                    .maxStock(stock.getMaxStock())
-                    .batchNo(stock.getBatchNo())
-                    .productionDate(stock.getProductionDate())
-                    .expiryDate(stock.getExpiryDate())
-                    .status(stock.getStatus())
-                    .createTime(stock.getCreateTime())
-                    .updateTime(stock.getUpdateTime())
-                    .build());
+    /** 按仓库汇总该药品的总库存 */
+    private int getTotalStock(String drugId, String warehouseId) {
+        LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<DrugStock>()
+                .eq(DrugStock::getDrugId, drugId);
+        if (warehouseId != null) {
+            wrapper.eq(DrugStock::getWarehouseId, warehouseId);
+        } else {
+            wrapper.isNull(DrugStock::getWarehouseId);
         }
-        return PageResult.of(result.getTotal(), page, pageSize, records);
+        return drugStockMapper.selectList(wrapper)
+                .stream().mapToInt(DrugStock::getCurrentStock).sum();
+    }
+
+    /** 按仓库汇总该药品的所有批次 max_stock 之和 */
+    private int getTotalMaxStock(String drugId, String warehouseId) {
+        LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<DrugStock>()
+                .eq(DrugStock::getDrugId, drugId);
+        if (warehouseId != null) {
+            wrapper.eq(DrugStock::getWarehouseId, warehouseId);
+        } else {
+            wrapper.isNull(DrugStock::getWarehouseId);
+        }
+        return drugStockMapper.selectList(wrapper)
+                .stream().mapToInt(DrugStock::getMaxStock).sum();
+    }
+
+    /** 查询仓库名称 */
+    private String getWarehouseName(String warehouseId) {
+        if (warehouseId == null) return null;
+        Warehouse wh = warehouseMapper.selectOne(
+                new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, warehouseId));
+        return wh != null ? wh.getName() : null;
+    }
+
+    /** 获取未处理的预警列表 */
+    private List<StockAlert> getUnhandledAlerts(String drugId, String warehouseId) {
+        LambdaQueryWrapper<StockAlert> wrapper = new LambdaQueryWrapper<StockAlert>()
+                .eq(StockAlert::getDrugId, drugId)
+                .eq(StockAlert::getIsHandled, 0);
+        if (warehouseId != null) {
+            wrapper.eq(StockAlert::getWarehouseId, warehouseId);
+        } else {
+            wrapper.isNull(StockAlert::getWarehouseId);
+        }
+        return stockAlertMapper.selectList(wrapper);
+    }
+
+    /** 获取指定类型的未处理预警 */
+    private List<StockAlert> getUnhandledAlertsByType(String drugId, String warehouseId, int alertType) {
+        LambdaQueryWrapper<StockAlert> wrapper = new LambdaQueryWrapper<StockAlert>()
+                .eq(StockAlert::getDrugId, drugId)
+                .eq(StockAlert::getWarehouseId, warehouseId)
+                .eq(StockAlert::getAlertType, alertType)
+                .eq(StockAlert::getIsHandled, 0);
+        return stockAlertMapper.selectList(wrapper);
+    }
+
+    /** 自动解除已恢复的预警 */
+    private void autoResolveAlerts(String drugId, String warehouseId, int totalStock) {
+        List<StockAlert> existingAlerts = getUnhandledAlerts(drugId, warehouseId);
+        for (StockAlert alert : existingAlerts) {
+            alert.setCurrentStock(totalStock);
+            if (alert.getAlertType() == 0 && totalStock > alert.getThreshold()) {
+                alert.setIsHandled(1);
+                alert.setHandleTime(LocalDateTime.now());
+            }
+            if (alert.getAlertType() == 2) {
+                int totalMaxStock = getTotalMaxStock(drugId, warehouseId);
+                if (totalStock <= totalMaxStock) {
+                    alert.setIsHandled(1);
+                    alert.setHandleTime(LocalDateTime.now());
+                }
+            }
+            stockAlertMapper.updateById(alert);
+        }
+    }
+
+    /** 创建低库存预警 */
+    private void createLowStockAlert(String drugId, String warehouseId, String batchNo, int totalStock, int minStock) {
+        StockAlert alert = new StockAlert();
+        alert.setDrugId(drugId);
+        alert.setWarehouseId(warehouseId);
+        alert.setBatchNo(batchNo);
+        alert.setAlertType(0);
+        alert.setCurrentStock(totalStock);
+        alert.setThreshold(minStock);
+        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
+        StringBuilder loc = new StringBuilder();
+        if (warehouseId != null || batchNo != null) {
+            loc.append("（");
+            if (warehouseId != null) loc.append("仓库: ").append(warehouseId);
+            if (warehouseId != null && batchNo != null) loc.append("，");
+            if (batchNo != null) loc.append("批号: ").append(batchNo);
+            loc.append("）");
+        }
+        alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + loc + "库存低于预警线（当前: " + totalStock + "，预警线: " + minStock + "）");
+        alert.setIsHandled(0);
+        stockAlertMapper.insert(alert);
+    }
+
+    /** 创建库存积压预警 */
+    private void createOverStockAlert(String drugId, String warehouseId, String batchNo, int totalStock, int maxStock) {
+        StockAlert alert = new StockAlert();
+        alert.setDrugId(drugId);
+        alert.setWarehouseId(warehouseId);
+        alert.setBatchNo(batchNo);
+        alert.setAlertType(2);
+        alert.setCurrentStock(totalStock);
+        alert.setThreshold(maxStock);
+        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
+        StringBuilder loc = new StringBuilder();
+        if (warehouseId != null || batchNo != null) {
+            loc.append("（");
+            if (warehouseId != null) loc.append("仓库: ").append(warehouseId);
+            if (warehouseId != null && batchNo != null) loc.append("，");
+            if (batchNo != null) loc.append("批号: ").append(batchNo);
+            loc.append("）");
+        }
+        alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + loc + "库存积压（当前: " + totalStock + "，上限: " + maxStock + "）");
+        alert.setIsHandled(0);
+        stockAlertMapper.insert(alert);
     }
 }

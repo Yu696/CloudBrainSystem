@@ -93,6 +93,7 @@
         <el-table-column prop="drugId" label="药品 ID" width="120" />
         <el-table-column prop="drugName" label="药品名称" min-width="120" />
         <el-table-column prop="warehouseName" label="仓库" width="120" />
+        <el-table-column prop="batchNo" label="批号" width="140" />
         <el-table-column prop="alertTypeName" label="预警类型" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="alertTypeTagType(row.alertType)" size="small">
@@ -226,6 +227,8 @@
         <el-alert title="该药品已过期，销毁后库存将置为 0" type="error" :closable="false" show-icon style="margin-bottom: 20px" />
         <el-descriptions :column="1" border>
           <el-descriptions-item label="药品ID">{{ adjustForm.drugId }}</el-descriptions-item>
+          <el-descriptions-item label="仓库">{{ adjustForm.warehouseId || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="批号" v-if="adjustForm.batchNo">{{ adjustForm.batchNo }}</el-descriptions-item>
           <el-descriptions-item label="当前库存">
             <el-tag type="danger">{{ adjustForm.currentStock }}</el-tag>
           </el-descriptions-item>
@@ -436,7 +439,8 @@ const adjustForm = reactive({
   quantity: 0,
   remark: '',
   alertMessage: '',
-  warehouseId: ''
+  warehouseId: '',
+  batchNo: ''
 })
 const adjustRules: FormRules = {
   quantity: [{ required: true, message: '请输入数量', trigger: 'blur' }]
@@ -491,6 +495,7 @@ async function handleStockConfirm() {
     finally { stockActionLoading.value = false }
   } else if (stockAction.value === 'out') {
     // 出库 → adjustStockApi 传负数
+    if (!stockSourceBatchNo.value) { ElMessage.warning('该批次信息缺失，无法出库'); return }
     if (stockQty.value > adjustForm.currentStock) {
       ElMessage.warning('出库数量不能超过当前库存')
       return
@@ -506,6 +511,7 @@ async function handleStockConfirm() {
     finally { stockActionLoading.value = false }
   } else {
     // 转仓 → transferStockApi
+    if (!stockSourceBatchNo.value) { ElMessage.warning('该批次信息缺失，无法转仓'); return }
     if (!stockTargetWarehouseId.value) { ElMessage.warning('请选择目标仓库'); return }
     if (stockTargetWarehouseId.value === stockSourceWarehouseId.value) { ElMessage.warning('源仓库和目标仓库不能相同'); return }
     stockActionLoading.value = true
@@ -514,7 +520,8 @@ async function handleStockConfirm() {
         drugId: adjustForm.drugId,
         fromWarehouseId: stockSourceWarehouseId.value,
         toWarehouseId: stockTargetWarehouseId.value,
-        quantity: stockQty.value
+        quantity: stockQty.value,
+        batchNo: stockSourceBatchNo.value || undefined
       })
       ElMessage.success('转仓成功')
       showDialog.value = false
@@ -531,6 +538,7 @@ async function handleAlertAdjust(row: any) {
   adjustForm.currentStock = row.currentStock
   adjustForm.alertMessage = row.alertMessage || ''
   adjustForm.warehouseId = row.warehouseId || ''
+  adjustForm.batchNo = row.batchNo || ''
 
   if (row.alertType === 0) {
     adjustForm.quantity = 1
@@ -579,7 +587,7 @@ const destroyLoading = ref(false)
 async function handleDestroyExpired() {
   destroyLoading.value = true
   try {
-    await destroyExpiredApi(adjustForm.drugId)
+    await destroyExpiredApi(adjustForm.drugId, adjustForm.warehouseId || undefined, adjustForm.batchNo || undefined)
     ElMessage.success('过期药品已销毁')
     showDialog.value = false
     loadStockList()
@@ -642,7 +650,8 @@ async function handleTransferStock() {
       drugId: adjustForm.drugId,
       fromWarehouseId: transferSourceWarehouseId.value,
       toWarehouseId: transferTargetWarehouseId.value,
-      quantity: transferQty.value
+      quantity: transferQty.value,
+      batchNo: adjustForm.batchNo || undefined
     })
     ElMessage.success('转仓成功')
     showDialog.value = false
@@ -666,6 +675,7 @@ async function handleDestroyQty() {
       drugId: adjustForm.drugId,
       quantity: -destroyQty.value,
       warehouseId: adjustForm.warehouseId || undefined,
+      batchNo: adjustForm.batchNo || undefined,
       remark: '积压销毁'
     })
     ElMessage.success('销毁成功')
