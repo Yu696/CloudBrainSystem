@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -19,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @CloudbrainTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@Transactional
 class DispenseServiceTest {
 
     @Autowired

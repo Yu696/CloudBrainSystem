@@ -13,6 +13,7 @@ export const useUserStore = defineStore('user', () => {
   const isAdmin = computed(() => userInfo.value?.userType === 1)
   const isDoctor = computed(() => userInfo.value?.userType === 0)
   const isPatient = computed(() => userInfo.value?.userType === 2)
+  const isRadiologist = computed(() => userInfo.value?.userType === 3)
 
   /** 登录，保存 token 和用户信息，患者同步 patientId */
   async function login(userName: string, password: string, userType?: number) {
@@ -47,5 +48,5 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  return { token, userInfo, isLoggedIn, role, isAdmin, isDoctor, isPatient, login, logout, fetchUserInfo }
+  return { token, userInfo, isLoggedIn, role, isAdmin, isDoctor, isPatient, isRadiologist, login, logout, fetchUserInfo }
 })

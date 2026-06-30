@@ -101,8 +101,15 @@ public class ImageServiceImpl implements ImageService {
     public PageResult<ImageVO> list(String patientId, String patientName, String examinationId, String modality, Boolean myExams, int page, int pageSize) {
         LambdaQueryWrapper<MedicalImage> wrapper = new LambdaQueryWrapper<>();
 
-        // 医生角色默认只看自己开单的影像
-        if (myExams != null && myExams) {
+        // 医生角色只能看到自己开单的影像；检查医生/管理员可看全部
+        Integer userType = getCurrentUserType();
+        boolean filterByMyExams = (userType != null && userType == 0); // 0=医生
+        // 如果前端传了 myExams 则按传参覆盖
+        if (myExams != null) {
+            filterByMyExams = myExams;
+        }
+
+        if (filterByMyExams) {
             List<String> examOrderIds = getMyExaminationOrderIds();
             if (examOrderIds.isEmpty()) {
                 return PageResult.of(0, page, pageSize, List.of());
@@ -298,5 +305,14 @@ public class ImageServiceImpl implements ImageService {
             return user.getUserId();
         }
         throw new BusinessException("未登录");
+    }
+
+    /** 获取当前登录用户的 userType */
+    private Integer getCurrentUserType() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof User user) {
+            return user.getUserType();
+        }
+        return null;
     }
 }

@@ -1,15 +1,21 @@
 package com.cloudbrain.service.image;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloudbrain.CloudbrainTest;
 import com.cloudbrain.TestAuthUtils;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.image.ImageAnnotateRequest;
 import com.cloudbrain.dto.response.image.AnnotationVO;
 import com.cloudbrain.dto.response.image.ImageVO;
+import com.cloudbrain.entity.Annotation;
+import com.cloudbrain.entity.MedicalImage;
+import com.cloudbrain.mapper.AnnotationMapper;
+import com.cloudbrain.mapper.MedicalImageMapper;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,8 +31,15 @@ class AnnotationServiceTest {
     @Autowired
     private AnnotationService annotationService;
 
+    @Autowired
+    private MedicalImageMapper medicalImageMapper;
+
+    @Autowired
+    private AnnotationMapper annotationMapper;
+
     private String testImageId;
     private String testAnnotationId;
+    private final List<String> createdImageIds = new ArrayList<>();
 
     @BeforeEach
     void setUpAuth() {
@@ -38,6 +51,17 @@ class AnnotationServiceTest {
         TestAuthUtils.clearAuth();
     }
 
+    @AfterAll
+    void cleanup() {
+        for (String imageId : createdImageIds) {
+            // 先删标注再删影像
+            annotationMapper.delete(new LambdaQueryWrapper<Annotation>()
+                    .eq(Annotation::getImageId, imageId));
+            medicalImageMapper.delete(new LambdaQueryWrapper<MedicalImage>()
+                    .eq(MedicalImage::getImageId, imageId));
+        }
+    }
+
     @BeforeAll
     void setUp() {
         TestAuthUtils.setupAuth();
@@ -46,6 +70,7 @@ class AnnotationServiceTest {
                 "annotation-test-content".getBytes());
         ImageVO vo = imageService.upload(file, "PAT_003", null, "MRI", "头部");
         testImageId = vo.getImageId();
+        createdImageIds.add(vo.getImageId());
         TestAuthUtils.clearAuth();
     }
 
@@ -102,6 +127,7 @@ class AnnotationServiceTest {
                 "file", "no_annot.png", "image/png",
                 "no-annotation".getBytes());
         ImageVO vo = imageService.upload(file, "PAT_004", null, null, null);
+        createdImageIds.add(vo.getImageId());
 
         List<AnnotationVO> annotations = annotationService.listByImageId(vo.getImageId());
         assertNotNull(annotations);

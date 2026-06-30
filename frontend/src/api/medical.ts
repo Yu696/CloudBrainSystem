@@ -83,6 +83,11 @@ export function listExaminationOrdersApi(recordId: string) {
   return request.get<any[]>('/examination/list', { params: { recordId } })
 }
 
+/** 检查单详情 */
+export function getExaminationDetailApi(orderId: string) {
+  return request.get<any>('/examination/detail', { params: { orderId } })
+}
+
 /** 检查结果 */
 export function getExaminationResultApi(orderId: string) {
   return request.get<any>('/examination/result', { params: { orderId } })
@@ -105,4 +110,9 @@ export function saveExaminationResultApi(data: {
 /** 影像检查单列表（医生端上传影像用） */
 export function listImagingOrdersApi(doctorId?: string) {
   return request.get<any[]>('/examination/imaging-orders', { params: { doctorId } })
+}
+
+/** 全部检查单列表（检查医生端：所有检查类别） */
+export function listAllExaminationOrdersApi(doctorId?: string) {
+  return request.get<any[]>('/examination/all-orders', { params: { doctorId } })
 }

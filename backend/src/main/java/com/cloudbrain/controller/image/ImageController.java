@@ -16,9 +16,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,6 +34,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/image")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('DOCTOR', 'RADIOLOGIST')")
 public class ImageController extends BaseController {
 
     private final ImageService imageService;
@@ -90,18 +92,12 @@ public class ImageController extends BaseController {
 
     @Operation(summary = "影像预览（IM-04）")
     @GetMapping("/preview")
-    public ResponseEntity<InputStreamResource> preview(@Parameter(description = "影像 ID") @RequestParam String imageId) {
-        ImageVO info = imageService.getInfo(imageId);
-        String contentType = switch (info.getImageType()) {
-            case 0 -> "image/png";
-            case 1 -> "image/jpeg";
-            case 2 -> "image/png";
-            default -> "application/octet-stream";
-        };
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header("Content-Disposition", "inline; filename=\"" + imageId + "\"")
-                .body(new InputStreamResource(imageService.previewAsStream(imageId)));
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<Void> preview(@Parameter(description = "影像 ID") @RequestParam String imageId) {
+        String accessUrl = imageService.getPreviewUrl(imageId);
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header("Location", accessUrl)
+                .build();
     }
 
     // ==================== IM-05 影像删除 ====================

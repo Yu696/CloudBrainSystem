@@ -160,21 +160,29 @@
             </el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="image">
+          <el-menu-item index="/image/list">
+            <el-icon><Picture /></el-icon>
+            <template #title>影像列表</template>
+          </el-menu-item>
+
+        </template>
+
+        <!-- ===== 检查医生菜单 ===== -->
+        <template v-if="userStore.isRadiologist">
+          <el-sub-menu index="exam-mgmt">
             <template #title>
-              <el-icon><Picture /></el-icon>
-              <span>影像管理</span>
+              <el-icon><FirstAidKit /></el-icon>
+              <span>检查管理</span>
             </template>
             <el-menu-item index="/doctor/exam-images">
               <el-icon><Notebook /></el-icon>
-              <template #title>影像检查单</template>
+              <template #title>全部检查单</template>
             </el-menu-item>
             <el-menu-item index="/image/list">
-              <el-icon><List /></el-icon>
+              <el-icon><Picture /></el-icon>
               <template #title>影像列表</template>
             </el-menu-item>
           </el-sub-menu>
-
         </template>
 
         <!-- ===== 患者菜单 ===== -->

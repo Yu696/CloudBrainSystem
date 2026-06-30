@@ -153,9 +153,60 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
                 .eq(ExaminationOrder::getRecordId, recordId)
                 .orderByDesc(ExaminationOrder::getCreateTime);
 
-        return this.list(wrapper).stream()
+        List<ExaminationOrder> orders = this.list(wrapper);
+        List<ExaminationOrderVO> voList = orders.stream()
                 .map(ExaminationOrderVO::from)
+                .collect(Collectors.toList());
+
+        List<String> patientIds = orders.stream()
+                .map(ExaminationOrder::getPatientId)
+                .filter(Objects::nonNull)
+                .distinct()
                 .toList();
+        if (!patientIds.isEmpty()) {
+            Map<String, String> nameMap = patientMapper.selectList(
+                    new LambdaQueryWrapper<Patient>()
+                            .in(Patient::getPatientId, patientIds))
+                    .stream()
+                    .collect(Collectors.toMap(Patient::getPatientId, Patient::getName, (a, b) -> a));
+            for (ExaminationOrderVO vo : voList) {
+                vo.setPatientName(nameMap.get(vo.getPatientId()));
+            }
+        }
+
+        return voList;
+    }
+
+    @Override
+    public List<ExaminationOrderVO> listAllOrders(String doctorId) {
+        LambdaQueryWrapper<ExaminationOrder> wrapper = new LambdaQueryWrapper<ExaminationOrder>()
+                .in(ExaminationOrder::getStatus, 0, 1, 2, 3)
+                .orderByDesc(ExaminationOrder::getCreateTime);
+        if (doctorId != null && !doctorId.isBlank()) {
+            wrapper.eq(ExaminationOrder::getDoctorId, doctorId);
+        }
+        List<ExaminationOrder> orders = this.list(wrapper);
+        List<ExaminationOrderVO> voList = orders.stream()
+                .map(ExaminationOrderVO::from)
+                .collect(Collectors.toList());
+
+        List<String> patientIds = orders.stream()
+                .map(ExaminationOrder::getPatientId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!patientIds.isEmpty()) {
+            Map<String, String> nameMap = patientMapper.selectList(
+                    new LambdaQueryWrapper<Patient>()
+                            .in(Patient::getPatientId, patientIds))
+                    .stream()
+                    .collect(Collectors.toMap(Patient::getPatientId, Patient::getName, (a, b) -> a));
+            for (ExaminationOrderVO vo : voList) {
+                vo.setPatientName(nameMap.get(vo.getPatientId()));
+            }
+        }
+
+        return voList;
     }
 
     @Override
@@ -199,7 +250,15 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
         if (order == null) {
             throw new BusinessException("检查单不存在");
         }
-        return ExaminationOrderVO.from(order);
+        ExaminationOrderVO vo = ExaminationOrderVO.from(order);
+        if (order.getPatientId() != null) {
+            Patient patient = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, order.getPatientId()));
+            if (patient != null) {
+                vo.setPatientName(patient.getName());
+            }
+        }
+        return vo;
     }
 
     @Override

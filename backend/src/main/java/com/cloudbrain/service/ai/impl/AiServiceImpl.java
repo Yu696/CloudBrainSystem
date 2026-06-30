@@ -596,6 +596,15 @@ public class AiServiceImpl implements AiService {
         try {
             response = visionRestTemplate.postForEntity(
                     visionConfig.getApiUrl(), entity, Map.class);
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            // 读超时或连接错误：给一次重试机会
+            log.warn("视觉 AI 调用首次超时，正在重试...: {}", e.getMessage());
+            try {
+                response = visionRestTemplate.postForEntity(
+                        visionConfig.getApiUrl(), entity, Map.class);
+            } catch (Exception retryEx) {
+                throw new AiUnavailableException("视觉 AI 重试仍失败: " + retryEx.getMessage(), retryEx);
+            }
         } catch (HttpClientErrorException e) {
             String respBody = e.getResponseBodyAsString();
             log.warn("视觉 API 调用失败(客户端错误): URL={}, 状态码={}, 响应体={}",

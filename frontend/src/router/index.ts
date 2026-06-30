@@ -270,7 +270,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'image/viewer/:imageId', name: 'ImageViewer', component: () => import('@/views/image/ImageViewerView.vue'), meta: { title: '影像预览' } },
       { path: 'image/compare', name: 'ImageCompare', component: () => import('@/views/image/ImageCompareView.vue'), meta: { title: '影像对比' } },
       // 医生影像检查单
-      { path: 'doctor/exam-images', name: 'ExamImageList', component: () => import('@/views/doctor/ExamImageList.vue'), meta: { title: '影像检查单' } },
+      { path: 'doctor/exam-images', name: 'ExamImageList', component: () => import('@/views/doctor/ExamImageList.vue'), meta: { title: '全部检查单' } },
 
       // M07 药库管理
       { path: 'pharmacy/drugs', name: 'DrugList', component: () => import('@/views/pharmacy/DrugListView.vue'), meta: { title: '药品管理' } },

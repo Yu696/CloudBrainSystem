@@ -117,7 +117,7 @@ public class RoleServiceImpl implements RoleService {
         switch (roleCode) {
             case "admin" -> systemUserMapper.delete(
                     new LambdaQueryWrapper<SystemUser>().eq(SystemUser::getUserId, userId));
-            case "doctor" -> doctorMapper.delete(
+            case "doctor", "radiologist" -> doctorMapper.delete(
                     new LambdaQueryWrapper<Doctor>().eq(Doctor::getUserId, userId));
             case "patient" -> patientMapper.delete(
                     new LambdaQueryWrapper<Patient>().eq(Patient::getUserId, userId));
@@ -137,7 +137,7 @@ public class RoleServiceImpl implements RoleService {
                     systemUserMapper.insert(su);
                 }
             }
-            case "doctor" -> {
+            case "doctor", "radiologist" -> {
                 Doctor doctor = doctorMapper.selectOne(
                         new LambdaQueryWrapper<Doctor>().eq(Doctor::getUserId, request.getUserId()));
                 if (doctor != null) {
@@ -170,6 +170,7 @@ public class RoleServiceImpl implements RoleService {
             case "admin" -> 1;
             case "doctor" -> 0;
             case "patient" -> 2;
+            case "radiologist" -> 3;
             default -> 2;
         };
     }
