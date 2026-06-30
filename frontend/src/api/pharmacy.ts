@@ -66,6 +66,16 @@ export function printShipRecordApi(recordId: string) {
   return request.get<any>(`/drug/print/${recordId}`)
 }
 
+/** 待发药处方列表 */
+export function dispenseListApi() {
+  return request.get<any>('/drug/dispense/list')
+}
+
+/** 已发药记录列表 */
+export function dispenseRecordsApi() {
+  return request.get<any>('/drug/dispense/records')
+}
+
 /** 仓库列表（DR-09） */
 export function warehouseListApi() {
   return request.get<any>('/drug/warehouse')
@@ -79,4 +89,24 @@ export function addWarehouseApi(data: {
   type: number
 }) {
   return request.post<any>('/drug/warehouse', data)
+}
+
+/** 更新仓库 */
+export function updateWarehouseApi(warehouseId: string, data: {
+  name: string
+  location?: string
+  adminId?: string
+  type: number
+}) {
+  return request.put<any>('/drug/warehouse', data, { params: { warehouseId } })
+}
+
+/** 删除仓库 */
+export function deleteWarehouseApi(warehouseId: string) {
+  return request.delete<any>('/drug/warehouse', { params: { warehouseId } })
+}
+
+/** 获取所有可用药品（下拉选择用） */
+export function allDrugsApi() {
+  return request.get<any>('/drug/all')
 }

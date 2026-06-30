@@ -29,4 +29,10 @@ public interface ExaminationService {
 
     /** 保存检查结果（新增或更新） */
     ExaminationResultVO saveResult(ExaminationResultCreateRequest request);
+
+    /** 检查单详情 */
+    ExaminationOrderVO getDetail(String orderId);
+
+    /** 支付检查费（患者端钱包扣款） */
+    void payOrder(String orderId);
 }

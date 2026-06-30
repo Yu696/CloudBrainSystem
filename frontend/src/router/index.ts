@@ -205,6 +205,20 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/patient/PatientRecordView.vue'),
         meta: { title: '我的病历' }
       },
+      // 患者端 - 检查费支付
+      {
+        path: 'exam/pay/:orderId',
+        name: 'ExamPay',
+        component: () => import('@/views/exam/ExamPayView.vue'),
+        meta: { title: '检查费支付' }
+      },
+      // 患者端 - 钱包
+      {
+        path: 'wallet',
+        name: 'Wallet',
+        component: () => import('@/views/wallet/WalletView.vue'),
+        meta: { title: '我的钱包' }
+      },
       // M04 AI 辅助诊断 - 患者端
       {
         path: 'ai/triage',

@@ -9,6 +9,16 @@ import com.cloudbrain.dto.response.ExaminationOrderVO;
 import com.cloudbrain.dto.response.ExaminationResultVO;
 import com.cloudbrain.entity.*;
 import com.cloudbrain.mapper.*;
+import com.cloudbrain.entity.ExaminationOrder;
+import com.cloudbrain.entity.ExaminationResult;
+import com.cloudbrain.entity.MedicalRecord;
+import com.cloudbrain.entity.Patient;
+import com.cloudbrain.entity.WalletTransaction;
+import com.cloudbrain.mapper.ExaminationOrderMapper;
+import com.cloudbrain.mapper.ExaminationResultMapper;
+import com.cloudbrain.mapper.MedicalRecordMapper;
+import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.WalletTransactionMapper;
 import com.cloudbrain.service.medical.ExaminationService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +40,8 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
 
     private final MedicalRecordMapper medicalRecordMapper;
     private final ExaminationResultMapper examinationResultMapper;
+    private final PatientMapper patientMapper;
+    private final WalletTransactionMapper walletTxMapper;
     private final PatientMapper patientMapper;
     private final MedicalImageMapper medicalImageMapper;
     private final DoctorMapper doctorMapper;
@@ -182,6 +194,16 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
     }
 
     @Override
+    public ExaminationOrderVO getDetail(String orderId) {
+        ExaminationOrder order = this.getOne(new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getOrderId, orderId));
+        if (order == null) {
+            throw new BusinessException("检查单不存在");
+        }
+        return ExaminationOrderVO.from(order);
+    }
+
+    @Override
     public ExaminationResultVO getResult(String orderId) {
         ExaminationResult result = examinationResultMapper.selectOne(
                 new LambdaQueryWrapper<ExaminationResult>()
@@ -237,6 +259,47 @@ public class ExaminationServiceImpl extends ServiceImpl<ExaminationOrderMapper, 
         }
 
         return ExaminationResultVO.from(result);
+    }
+
+    @Override
+    @Transactional
+    public void payOrder(String orderId) {
+        ExaminationOrder order = this.getOne(new LambdaQueryWrapper<ExaminationOrder>()
+                .eq(ExaminationOrder::getOrderId, orderId));
+        if (order == null) {
+            throw new BusinessException("检查单不存在");
+        }
+        if (order.getStatus() != 0) {
+            throw new BusinessException("该检查单已支付或无需支付");
+        }
+
+        // 从钱包扣款
+        Patient patient = patientMapper.selectOne(
+                new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, order.getPatientId()));
+        if (patient == null) {
+            throw new BusinessException("患者档案不存在");
+        }
+
+        BigDecimal fee = order.getAmount() != null ? order.getAmount() : BigDecimal.ZERO;
+        BigDecimal before = patient.getBalance() != null ? patient.getBalance() : BigDecimal.ZERO;
+        BigDecimal after = before.subtract(fee);
+        patient.setBalance(after);
+        patientMapper.updateById(patient);
+
+        // 记录交易
+        WalletTransaction tx = new WalletTransaction();
+        tx.setTransactionId(UUIDUtil.generateTransactionId());
+        tx.setPatientId(order.getPatientId());
+        tx.setType(3); // 检查费
+        tx.setAmount(fee.negate());
+        tx.setBalanceAfter(after);
+        tx.setRefId(order.getOrderId());
+        tx.setRemark("检查费：" + order.getExamName());
+        walletTxMapper.insert(tx);
+
+        // 更新检查单状态
+        order.setStatus(1); // 已缴费
+        updateById(order);
     }
 
     /**

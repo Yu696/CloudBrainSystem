@@ -9,11 +9,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.context.annotation.Configuration;
 
 import javax.sql.DataSource;
 
 @TestConfiguration
 @EnableConfigurationProperties(SecurityProperties.class)
+/**
+ * Test DataSource configuration.
+ * Ensures Spring Boot auto-configures the DataSource from application.yml during tests.
+ */
+@Configuration
+@EnableAutoConfiguration
 public class TestDataSourceConfig {
 
     @Bean

@@ -179,6 +179,11 @@
 
         <!-- ===== 患者菜单 ===== -->
         <template v-if="userStore.isPatient">
+          <el-menu-item index="/wallet">
+            <el-icon><Wallet /></el-icon>
+            <template #title>我的钱包</template>
+          </el-menu-item>
+
           <el-sub-menu index="appointment">
             <template #title>
               <el-icon><Calendar /></el-icon>
@@ -275,6 +280,7 @@ import {
   Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock,
   MagicStick, Search, Reading, DataAnalysis,
   Picture, Goods, DataBoard, TakeawayBox, Notebook
+  Picture, Upload, Rank, Goods, DataBoard, TakeawayBox, Wallet
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'

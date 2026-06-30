@@ -29,6 +29,12 @@ public class ExaminationController extends BaseController {
         return success(examinationService.createOrder(request));
     }
 
+    @Operation(summary = "检查单详情")
+    @GetMapping("/detail")
+    public Result<ExaminationOrderVO> detail(@RequestParam String orderId) {
+        return success(examinationService.getDetail(orderId));
+    }
+
     @Operation(summary = "检查单列表")
     @GetMapping("/list")
     public Result<List<ExaminationOrderVO>> list(@RequestParam String recordId) {
@@ -59,6 +65,13 @@ public class ExaminationController extends BaseController {
     @GetMapping("/result")
     public Result<ExaminationResultVO> result(@RequestParam String orderId) {
         return success(examinationService.getResult(orderId));
+    }
+
+    @Operation(summary = "支付检查费（患者端钱包扣款）")
+    @PostMapping("/pay")
+    public Result<String> pay(@RequestParam String orderId) {
+        examinationService.payOrder(orderId);
+        return success("支付成功");
     }
 
     @Operation(summary = "保存检查结果（新增或更新）")
