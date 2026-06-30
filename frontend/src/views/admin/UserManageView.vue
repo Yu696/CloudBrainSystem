@@ -8,6 +8,7 @@
         <el-radio-button value="2">患者</el-radio-button>
         <el-radio-button value="0">医生</el-radio-button>
         <el-radio-button value="1">管理员</el-radio-button>
+        <el-radio-button value="3">检查医生</el-radio-button>
       </el-radio-group>
       <el-input
         v-model="searchText"
@@ -105,6 +106,7 @@
                 <el-option :value="2" label="患者" />
                 <el-option :value="0" label="医生" />
                 <el-option :value="1" label="管理员" />
+                <el-option :value="3" label="检查医生" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -167,6 +169,7 @@ const filterRoleMap: Record<string, string> = {
   '0': '医生',
   '1': '超级管理员',
   '2': '患者',
+  '3': '检查医生',
 }
 
 const filteredUsers = computed(() => {

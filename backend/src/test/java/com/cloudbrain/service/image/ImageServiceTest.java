@@ -5,7 +5,9 @@ import com.cloudbrain.TestAuthUtils;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.PageResult;
 import com.cloudbrain.dto.response.image.ImageVO;
+import com.cloudbrain.entity.ConversionLog;
 import com.cloudbrain.entity.MedicalImage;
+import com.cloudbrain.mapper.ConversionLogMapper;
 import com.cloudbrain.mapper.MedicalImageMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.junit.jupiter.api.*;
@@ -27,15 +29,20 @@ class ImageServiceTest {
     @Autowired
     private MedicalImageMapper medicalImageMapper;
 
+    @Autowired
+    private ConversionLogMapper conversionLogMapper;
+
     private static String testImageId;
     private static final List<String> createdImageIds = new ArrayList<>();
     private static MedicalImageMapper staticMapper;
+    private static ConversionLogMapper staticConversionLogMapper;
 
     @BeforeEach
     void setUpAuth() {
         TestAuthUtils.setupAuth();
         if (staticMapper == null) {
             staticMapper = medicalImageMapper;
+            staticConversionLogMapper = conversionLogMapper;
         }
     }
 
@@ -46,6 +53,11 @@ class ImageServiceTest {
 
     @AfterAll
     static void cleanup() {
+        if (staticConversionLogMapper != null && !createdImageIds.isEmpty()) {
+            createdImageIds.forEach(imageId ->
+                    staticConversionLogMapper.delete(new LambdaQueryWrapper<ConversionLog>()
+                            .eq(ConversionLog::getImageId, imageId)));
+        }
         if (staticMapper != null && !createdImageIds.isEmpty()) {
             createdImageIds.forEach(imageId ->
                     staticMapper.delete(new LambdaQueryWrapper<MedicalImage>()

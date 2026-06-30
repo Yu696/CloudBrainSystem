@@ -87,10 +87,10 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
                 su.setAdminType(0);
                 systemUserMapper.insert(su);
             }
-            case "doctor" -> {
-                // K6: 创建医生时必须指定科室，不再硬编码回退 "0"
+            case "doctor", "radiologist" -> {
+                // K6: 创建医生/检查医生时必须指定科室
                 if (departmentId == null || departmentId.isBlank()) {
-                    throw new BusinessException("创建医生时必须指定科室");
+                    throw new BusinessException("创建医生/检查医生时必须指定科室");
                 }
                 Doctor doctor = new Doctor();
                 doctor.setDoctorId(UUIDUtil.generateDoctorId());
@@ -108,6 +108,7 @@ public class SystemUserServiceImpl extends ServiceImpl<SystemUserMapper, SystemU
             case "admin" -> 1;
             case "doctor" -> 0;
             case "patient" -> 2;
+            case "radiologist" -> 3;
             default -> 2;
         };
     }

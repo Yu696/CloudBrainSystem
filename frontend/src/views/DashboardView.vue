@@ -185,7 +185,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit, CircleCheck, CreditCard, MagicStick, Search, Clock, ArrowRight } from '@element-plus/icons-vue'
+import { User, Document, TrendCharts, Calendar, List, HomeFilled, FirstAidKit, CircleCheck, CreditCard, MagicStick, Search, Clock, ArrowRight, Picture } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStatsApi } from '@/api/appointment'
 
@@ -223,6 +223,14 @@ const stats = computed(() => {
       { label: '今日已诊', value: d.doctorTodayCompleted ?? 0, icon: CircleCheck },
       { label: '本月接诊', value: d.doctorMonthCompleted ?? 0, icon: TrendCharts },
       { label: '累计患者', value: d.doctorTotalPatients ?? 0, icon: HomeFilled }
+    ]
+  }
+  if (userStore.isRadiologist) {
+    return [
+      { label: '待上传影像', value: d.radiologistPendingUpload ?? 0, icon: Picture },
+      { label: '待初诊', value: d.radiologistPendingReport ?? 0, icon: Document },
+      { label: '本月已报', value: d.radiologistMonthReported ?? 0, icon: TrendCharts },
+      { label: '累计报告', value: d.radiologistTotalReported ?? 0, icon: CircleCheck }
     ]
   }
   // patient

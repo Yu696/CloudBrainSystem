@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -57,12 +58,21 @@ public class ExaminationController extends BaseController {
 
     @Operation(summary = "影像检查单列表（医生端上传影像用）")
     @GetMapping("/imaging-orders")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RADIOLOGIST')")
     public Result<List<ExaminationOrderVO>> listImagingOrders(@RequestParam(required = false) String doctorId) {
         return success(examinationService.listImagingOrders(doctorId));
     }
 
+    @Operation(summary = "全部检查单列表（检查医生端：所有检查类别）")
+    @GetMapping("/all-orders")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RADIOLOGIST')")
+    public Result<List<ExaminationOrderVO>> listAllOrders(@RequestParam(required = false) String doctorId) {
+        return success(examinationService.listAllOrders(doctorId));
+    }
+
     @Operation(summary = "检查结果")
     @GetMapping("/result")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RADIOLOGIST')")
     public Result<ExaminationResultVO> result(@RequestParam String orderId) {
         return success(examinationService.getResult(orderId));
     }
@@ -76,6 +86,7 @@ public class ExaminationController extends BaseController {
 
     @Operation(summary = "保存检查结果（新增或更新）")
     @PostMapping("/result")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RADIOLOGIST')")
     public Result<ExaminationResultVO> saveResult(@Valid @RequestBody ExaminationResultCreateRequest request) {
         return success(examinationService.saveResult(request));
     }

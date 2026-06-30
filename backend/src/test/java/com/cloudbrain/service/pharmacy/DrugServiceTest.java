@@ -1,5 +1,6 @@
 package com.cloudbrain.service.pharmacy;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloudbrain.CloudbrainTest;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.PageResult;
@@ -8,15 +9,17 @@ import com.cloudbrain.dto.request.pharmacy.DrugUpdateRequest;
 import com.cloudbrain.dto.response.pharmacy.DrugVO;
 import com.cloudbrain.entity.Drug;
 import com.cloudbrain.mapper.DrugMapper;
-import com.cloudbrain.util.UUIDUtil;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @CloudbrainTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DrugServiceTest {
 
@@ -26,7 +29,8 @@ class DrugServiceTest {
     @Autowired
     private DrugMapper drugMapper;
 
-    private static String testDrugId;
+    private String testDrugId;
+    private final List<String> createdDrugIds = new ArrayList<>();
 
     @Test
     @Order(1)
@@ -48,6 +52,7 @@ class DrugServiceTest {
         request.setDrugCategory("测试类别");
 
         testDrugId = drugService.add(request);
+        createdDrugIds.add(testDrugId);
         assertNotNull(testDrugId);
 
         DrugVO vo = drugService.getDetail(testDrugId);
@@ -114,14 +119,22 @@ class DrugServiceTest {
         addReq.setUnitPrice(new BigDecimal("1.00"));
         addReq.setPrescriptionType(1);
         String delId = drugService.add(addReq);
+        createdDrugIds.add(delId);
 
         drugService.delete(delId);
-        Drug deleted = drugMapper.selectById(delId); // our DrugMapper uses drugId not Long id, need to use selectOne
 
-        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Drug> wrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        LambdaQueryWrapper<Drug> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Drug::getDrugId, delId);
         Drug drug = drugMapper.selectOne(wrapper);
         assertEquals(0, drug.getStatus());
+    }
+
+    @AfterAll
+    void cleanup() {
+        if (!createdDrugIds.isEmpty()) {
+            createdDrugIds.forEach(drugId ->
+                    drugMapper.delete(new LambdaQueryWrapper<Drug>()
+                            .eq(Drug::getDrugId, drugId)));
+        }
     }
 }
