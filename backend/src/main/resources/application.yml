@@ -74,13 +74,23 @@ ai:
     enabled: true
     max-per-minute: 10
     max-per-day: 100
+  vision:
+    api-key: ark-5e783fde-f569-4b18-aac4-e82e7771a028-59537
+    api-url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: ep-20260629234720-b6dtg
+    timeout: 60000
   mock:
     enabled: ${AI_MOCK_ENABLED:false}
 
 # M05 文件存储配置
 storage:
-  type: local
+  type: minio
   base-path: ./data/cloudbrain/images
+  minio:
+    endpoint: http://192.168.110.128:9000
+    access-key: minioadmin
+    secret-key: minioadmin123
+    bucket: cloudbrain-images
   max-file-size: 50MB
   allowed-types:
     - dicom

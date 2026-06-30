@@ -7,6 +7,40 @@
       影像上传
     </div>
 
+    <!-- 检查单上下文卡片（从检查单入口进入时显示） -->
+    <div v-if="examOrder" class="exam-context-card">
+      <div class="context-header">
+        <el-icon class="context-icon"><Notebook /></el-icon>
+        <span>关联检查单</span>
+      </div>
+      <div class="context-body">
+        <div class="context-item">
+          <span class="context-label">检查项目：</span>
+          <el-tag size="small" type="warning">{{ examOrder.examName }}</el-tag>
+        </div>
+        <div class="context-item">
+          <span class="context-label">患者 ID：</span>
+          <span class="context-value">{{ examOrder.patientId }}</span>
+        </div>
+        <div class="context-item">
+          <span class="context-label">检查单号：</span>
+          <span class="context-value">{{ examOrder.orderId }}</span>
+        </div>
+        <div class="context-item">
+          <span class="context-label">状态：</span>
+          <el-tag size="small" :type="examStatusTag">{{ examStatusText }}</el-tag>
+        </div>
+      </div>
+      <el-alert
+        v-if="examOrder.status !== 1"
+        :title="examOrder.status === 2 ? '该检查单已有影像上传，如确需补充请联系管理员' : '该检查单尚未缴费，请先完成缴费后再上传影像'"
+        :type="examOrder.status === 2 ? 'info' : 'error'"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px;"
+      />
+    </div>
+
     <div class="upload-content">
       <!-- 拖拽上传区域 -->
       <div class="cb-card">
@@ -48,10 +82,10 @@
         <div class="cb-card-body">
           <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
             <el-form-item label="患者 ID" prop="patientId">
-              <el-input v-model="form.patientId" placeholder="请输入患者 ID" />
+              <el-input v-model="form.patientId" :disabled="!!orderIdFromRoute" placeholder="请输入患者 ID" />
             </el-form-item>
             <el-form-item label="检查 ID" prop="examinationId">
-              <el-input v-model="form.examinationId" placeholder="请输入检查 ID（可选）" />
+              <el-input v-model="form.examinationId" :disabled="!!orderIdFromRoute" placeholder="请输入检查 ID（可选）" />
             </el-form-item>
             <el-form-item label="影像模态" prop="modality">
               <el-select v-model="form.modality" placeholder="请选择影像模态" clearable style="width: 100%">
@@ -73,7 +107,7 @@
         <el-button
           type="primary"
           :loading="uploading"
-          :disabled="fileList.length !== 1"
+          :disabled="fileList.length !== 1 || uploadDisabled"
           @click="handleSingleUpload"
         >
           <el-icon><Upload /></el-icon>
@@ -82,7 +116,7 @@
         <el-button
           type="success"
           :loading="batchUploading"
-          :disabled="fileList.length < 2"
+          :disabled="fileList.length < 2 || uploadDisabled"
           @click="handleBatchUpload"
         >
           <el-icon><Upload /></el-icon>
@@ -104,22 +138,47 @@
         </div>
         <div class="cb-card-body">
           <el-table :data="uploadResults" border stripe style="width: 100%">
-            <el-table-column prop="imageName" label="文件名" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="imageId" label="影像 ID" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="imageType" label="类型" width="80" />
-            <el-table-column label="文件大小" width="120">
+            <el-table-column label="缩略图" width="100" align="center">
+              <template #default="{ row }">
+                <el-image
+                  v-if="row.success && row.imageId"
+                  :src="imagePreviewUrl(row.imageId)"
+                  :preview-src-list="[imagePreviewUrl(row.imageId)]"
+                  fit="cover"
+                  style="width: 72px; height: 72px; border-radius: 4px;"
+                >
+                  <template #error>
+                    <div class="thumb-placeholder">
+                      <el-icon><Picture /></el-icon>
+                    </div>
+                  </template>
+                  <template #placeholder>
+                    <div class="thumb-placeholder">
+                      <el-icon><Loading /></el-icon>
+                    </div>
+                  </template>
+                </el-image>
+                <div v-else class="thumb-placeholder">
+                  <el-icon><WarningFilled /></el-icon>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="imageName" label="文件名" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="imageId" label="影像 ID" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="imageType" label="类型" width="70" />
+            <el-table-column label="文件大小" width="100">
               <template #default="{ row }">
                 {{ formatFileSize(row.fileSize) }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="80" align="center">
+            <el-table-column label="状态" width="70" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.success ? 'success' : 'danger'" size="small" effect="plain">
                   {{ row.success ? '成功' : '失败' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="message" label="备注" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="message" label="备注" min-width="120" show-overflow-tooltip />
           </el-table>
         </div>
       </div>
@@ -128,21 +187,59 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
   Upload,
   Document,
   SuccessFilled,
-  UploadFilled
+  UploadFilled,
+  Notebook,
+  Picture,
+  Loading,
+  WarningFilled
 } from '@element-plus/icons-vue'
 import type { UploadInstance, UploadFile } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import { uploadImageApi, batchUploadImageApi } from '@/api/image'
+import { uploadImageApi, batchUploadImageApi, imagePreviewUrl } from '@/api/image'
 
 const router = useRouter()
+const route = useRoute()
+
+/* ==================== 检查单上下文 ==================== */
+
+const orderIdFromRoute = computed(() => route.params.orderId as string | undefined)
+const examOrder = ref<any>(null)
+
+const examStatusMap: Record<number, string> = {
+  0: '已开单', 1: '已缴费', 2: '检查中', 3: '已完成', 4: '已取消'
+}
+const examStatusTagMap: Record<number, '' | 'warning' | 'success' | 'info' | 'danger'> = {
+  0: 'warning', 1: '', 2: 'info', 3: 'success', 4: 'info'
+}
+const examStatusText = computed(() => examStatusMap[examOrder.value?.status] || '')
+const examStatusTag = computed(() => examStatusTagMap[examOrder.value?.status] || 'info')
+const uploadDisabled = computed(() => examOrder.value != null && examOrder.value.status !== 1)
+
+onMounted(() => {
+  if (orderIdFromRoute.value) {
+    const patientId = (route.query.patientId as string) || ''
+    const examName = (route.query.examName as string) || ''
+    const status = parseInt((route.query.status as string) || '0')
+
+    form.patientId = patientId
+    form.examinationId = orderIdFromRoute.value
+
+    examOrder.value = {
+      orderId: orderIdFromRoute.value,
+      patientId,
+      examName,
+      status
+    }
+  }
+})
 
 /* ==================== 文件上传 ==================== */
 
@@ -267,6 +364,11 @@ async function handleSingleUpload() {
     })
     ElMessage.success(`文件 "${file.name}" 上传成功`)
 
+    // 上传成功后更新检查单状态为"检查中"
+    if (examOrder.value && examOrder.value.status === 1) {
+      examOrder.value.status = 2
+    }
+
     // 从列表中移除已上传的文件
     removeFileFromList(uploadFile.uid)
   } catch (err: any) {
@@ -327,6 +429,11 @@ async function handleBatchUpload() {
     })
     ElMessage.success(`批量上传成功，共 ${resultArray.length} 个文件`)
 
+    // 上传成功后更新检查单状态为"检查中"
+    if (examOrder.value && examOrder.value.status === 1) {
+      examOrder.value.status = 2
+    }
+
     // 清空文件列表
     fileList.value = []
     uploadRef.value?.clearFiles()
@@ -382,6 +489,64 @@ function formatFileSize(bytes?: number): string {
 <style scoped>
 .image-upload-page {
   max-width: 960px;
+}
+
+/* ===== 检查单上下文卡片 ===== */
+.exam-context-card {
+  background: var(--cb-primary-lighter, #f0f7ff);
+  border: 1px solid var(--cb-primary-light, #a0d2f0);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.context-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 12px;
+  color: var(--cb-primary);
+}
+
+.context-icon {
+  font-size: 18px;
+}
+
+.context-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.context-label {
+  color: var(--cb-text-secondary);
+}
+
+.context-value {
+  color: var(--cb-text-primary);
+  font-weight: 500;
+}
+
+/* ===== 缩略图 ===== */
+.thumb-placeholder {
+  width: 72px;
+  height: 72px;
+  border-radius: 4px;
+  background: var(--cb-background, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cb-text-placeholder, #c0c4cc);
+  margin: 0 auto;
 }
 
 .header-icon {

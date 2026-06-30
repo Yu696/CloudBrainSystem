@@ -13,6 +13,7 @@
           <div class="cb-card">
             <div class="cb-card-header">
               <el-icon class="header-icon"><Document /></el-icon>
+              <span v-if="currentRecordId" class="record-id-tag">编号：{{ currentRecordId }}</span>
               <span>病历信息</span>
             </div>
             <div class="cb-card-body">
@@ -75,22 +76,101 @@
               </el-form>
             </div>
           </div>
+
         </el-col>
 
         <el-col :span="8">
-          <div class="cb-card tips-card">
-            <div class="cb-card-header">
-              <el-icon class="header-icon"><InfoFilled /></el-icon>
-              <span>患者信息</span>
-            </div>
-            <div class="cb-card-body">
-              <div v-if="patientInfo" class="patient-info-side">
-                <div class="info-item"><span class="info-label">患者姓名</span><span class="info-val">{{ patientInfo.name }}</span></div>
-                <div class="info-item"><span class="info-label">性别</span><span class="info-val">{{ patientInfo.gender === 1 ? '男' : '女' }}</span></div>
-                <div class="info-item"><span class="info-label">联系电话</span><span class="info-val">{{ patientInfo.phone }}</span></div>
-                <div class="info-item"><span class="info-label">过敏史</span><span class="info-val warning">{{ patientInfo.allergyHistory || '无' }}</span></div>
+          <div class="side-sticky">
+            <!-- 患者信息 -->
+            <div class="cb-card">
+              <div class="cb-card-header">
+                <el-icon class="header-icon"><InfoFilled /></el-icon>
+                <span>患者信息</span>
               </div>
-              <el-empty v-else description="加载中..." :image-size="60" />
+              <div class="cb-card-body">
+                <div v-if="patientInfo" class="patient-info-side">
+                  <div class="info-item"><span class="info-label">患者姓名</span><span class="info-val">{{ patientInfo.name }}</span></div>
+                  <div class="info-item"><span class="info-label">性别</span><span class="info-val">{{ patientInfo.gender === 1 ? '男' : '女' }}</span></div>
+                  <div class="info-item"><span class="info-label">联系电话</span><span class="info-val">{{ patientInfo.phone }}</span></div>
+                  <div class="info-item"><span class="info-label">过敏史</span><span class="info-val warning">{{ patientInfo.allergyHistory || '无' }}</span></div>
+                </div>
+                <el-empty v-else description="加载中..." :image-size="60" />
+              </div>
+            </div>
+
+            <!-- 处方记录 -->
+            <div v-if="prescriptions.length > 0" class="cb-card" style="margin-top:16px">
+              <div class="cb-card-header">
+                <el-icon class="header-icon"><FirstAidKit /></el-icon>
+                <span>处方记录 ({{ prescriptions.length }})</span>
+              </div>
+              <div class="cb-card-body">
+                <div v-for="pres in prescriptions" :key="pres.prescriptionId" class="prescription-block">
+                  <div class="pres-header">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <el-tag :type="presStatusTag(pres.status)" size="small">{{ presStatusText(pres.status) }}</el-tag>
+                      <span class="pres-date">{{ pres.createTime?.substring(0, 10) }}</span>
+                    </div>
+                    <div style="display:flex;gap:2px">
+                      <el-button size="small" text @click="editPrescription(pres)"><el-icon><Edit /></el-icon></el-button>
+                      <el-button size="small" text type="danger" @click="deletePrescriptionItem(pres)"><el-icon><Delete /></el-icon></el-button>
+                    </div>
+                  </div>
+                  <el-table :data="pres.items || []" size="small" border>
+                    <el-table-column prop="drugName" label="药品" min-width="80" />
+                    <el-table-column prop="dosage" label="剂量" width="70" />
+                    <el-table-column prop="frequency" label="频次" width="70" />
+                    <el-table-column prop="days" label="天数" width="50" />
+                  </el-table>
+                  <div v-if="!pres.items?.length" class="pres-empty">暂无药品明细</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 检查记录 -->
+            <div v-if="examinationOrders.length > 0" class="cb-card" style="margin-top:16px">
+              <div class="cb-card-header">
+                <el-icon class="header-icon"><Search /></el-icon>
+                <span>检查记录 ({{ examinationOrders.length }})</span>
+              </div>
+              <div class="cb-card-body">
+                <div v-for="e in examinationOrders" :key="e.orderId" class="prescription-block">
+                  <div class="pres-header">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <el-tag :type="examCategoryText(e.examCategory) === '影像' ? 'primary' : examCategoryText(e.examCategory) === '实验室' ? 'success' : 'warning'" size="small" effect="plain">
+                        {{ examCategoryText(e.examCategory) }}
+                      </el-tag>
+                      <strong>{{ e.examName }}</strong>
+                      <el-tag :type="examStatusTag(e.status)" size="small">{{ examStatusText(e.status) }}</el-tag>
+                    </div>
+                    <div style="display:flex;gap:2px">
+                      <el-button size="small" text @click="editExam(e)"><el-icon><Edit /></el-icon></el-button>
+                      <el-button size="small" text type="danger" @click="deleteExamItem(e)"><el-icon><Delete /></el-icon></el-button>
+                    </div>
+                  </div>
+                  <!-- 检查结果 -->
+                  <div v-if="e._result" class="exam-result-info">
+                    <div v-if="e._result.resultData" class="exam-row">
+                      <span class="exam-label">结果：</span><span>{{ e._result.resultData }}</span>
+                    </div>
+                    <div v-if="e._result.doctorOpinion" class="exam-row">
+                      <span class="exam-label">意见：</span><span>{{ e._result.doctorOpinion }}</span>
+                    </div>
+                  </div>
+                  <!-- 影像缩略图 -->
+                  <div v-if="e._images?.length" class="thumb-list">
+                    <div
+                      v-for="img in e._images"
+                      :key="img.imageId"
+                      class="exam-thumb"
+                      @click="goImageViewer(img.imageId)"
+                    >
+                      <img :src="imagePreviewUrl(img.imageId)" :alt="img.imageName" />
+                    </div>
+                  </div>
+                  <div v-else class="pres-empty">暂无影像</div>
+                </div>
+              </div>
             </div>
           </div>
         </el-col>
@@ -142,11 +222,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Select, MagicStick } from '@element-plus/icons-vue'
-import { createMedicalRecordApi, updateMedicalRecordApi, completeMedicalRecordApi, getMedicalRecordDetailApi } from '@/api/medical'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowLeft, Document, InfoFilled, FolderChecked, FirstAidKit, Search, Select, MagicStick, Edit, Delete } from '@element-plus/icons-vue'
+import { createMedicalRecordApi, updateMedicalRecordApi, completeMedicalRecordApi, getMedicalRecordDetailApi, listMedicalRecordsApi, listPrescriptionsApi, getPrescriptionDetailApi, listExaminationOrdersApi, getExaminationResultApi, deletePrescriptionApi, deleteExaminationOrderApi } from '@/api/medical'
 import { getAppointmentDetailApi, getMyDoctorInfoApi } from '@/api/appointment'
 import { getPatientInfoApi } from '@/api/patient'
+import { imageListApi, imagePreviewUrl } from '@/api/image'
 import { diagnosisApi } from '@/api/ai'
 import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
@@ -168,6 +249,8 @@ const diagnosing = ref(false)
 const showDiagnosisDialog = ref(false)
 const diagnosisResult = ref<any>(null)
 const fallbackMode = ref(false)
+const prescriptions = ref<any[]>([])
+const examinationOrders = ref<any[]>([])
 
 const form = reactive({
   chiefComplaint: '',
@@ -197,6 +280,19 @@ onMounted(async () => {
     myDoctorId.value = (meRes.data as any)?.doctorId || ''
   } catch { /* ignore */ }
 
+  // 如果 sessionStorage 里没有 recordId，尝试通过预约号查找已有病历
+  if (!currentRecordId.value && patientInfo.value?.patientId && myDoctorId.value) {
+    try {
+      const listRes = await listMedicalRecordsApi(patientInfo.value.patientId, myDoctorId.value)
+      const records = (listRes.data as any[]) || []
+      const match = records.find((r: any) => r.appointmentId === appointmentId)
+      if (match) {
+        currentRecordId.value = match.recordId
+        sessionStorage.setItem(`record_${appointmentId}`, match.recordId)
+      }
+    } catch { /* ignore */ }
+  }
+
   // 如果已有 recordId，尝试回填表单，同时校验病历状态
   if (currentRecordId.value) {
     try {
@@ -220,8 +316,106 @@ onMounted(async () => {
       form.diagnosis = rec.diagnosis || ''
       form.treatmentOpinion = rec.treatmentOpinion || ''
     } catch { /* ignore */ }
+    // 加载已有的处方和检查单
+    loadRelatedData()
   }
 })
+
+async function loadRelatedData() {
+  if (!currentRecordId.value) return
+  // 加载处方
+  try {
+    const presRes = await listPrescriptionsApi(currentRecordId.value)
+    const presList = (presRes.data as any[]) || []
+    for (const pres of presList) {
+      try {
+        const detailRes = await getPrescriptionDetailApi(pres.prescriptionId)
+        pres.items = (detailRes.data as any)?.items || []
+      } catch { pres.items = [] }
+    }
+    prescriptions.value = presList
+  } catch { /* ignore */ }
+
+  // 加载检查单（含结果和影像）
+  try {
+    const examRes = await listExaminationOrdersApi(currentRecordId.value)
+    const examList = (examRes.data as any[]) || []
+    for (const e of examList) {
+      try {
+        const resultRes = await getExaminationResultApi(e.orderId)
+        e._result = resultRes.data
+      } catch { e._result = null }
+      try {
+        const imgRes = await imageListApi({ examinationId: e.orderId })
+        e._images = (imgRes.data as any)?.records || []
+      } catch { e._images = [] }
+    }
+    examinationOrders.value = examList
+  } catch { /* ignore */ }
+}
+
+function goImageViewer(imageId: string) {
+  router.push(`/image/viewer/${imageId}`)
+}
+
+function goPrescription() {
+  router.push(`/doctor/prescription/${currentRecordId.value}`)
+}
+
+function goExam() {
+  router.push(`/doctor/exam/${currentRecordId.value}`)
+}
+
+function editPrescription(pres: any) {
+  router.push(`/doctor/prescription-edit/${currentRecordId.value}/${pres.prescriptionId}`)
+}
+
+async function deletePrescriptionItem(pres: any) {
+  try {
+    await ElMessageBox.confirm('确定删除该处方吗？', '提示', { type: 'warning' })
+  } catch { return }
+  try {
+    await deletePrescriptionApi(pres.prescriptionId)
+    ElMessage.success('处方已删除')
+    loadRelatedData()
+  } catch { /* handled by interceptor */ }
+}
+
+function editExam(order: any) {
+  router.push(`/doctor/exam-edit/${currentRecordId.value}/${order.orderId}`)
+}
+
+async function deleteExamItem(order: any) {
+  try {
+    await ElMessageBox.confirm('确定删除该检查单吗？', '提示', { type: 'warning' })
+  } catch { return }
+  try {
+    await deleteExaminationOrderApi(order.orderId)
+    ElMessage.success('检查单已删除')
+    loadRelatedData()
+  } catch { /* handled by interceptor */ }
+}
+
+function presStatusTag(status: number): string {
+  const map: Record<number, string> = { 0: 'warning', 1: 'primary', 2: 'success', 3: 'primary', 4: 'danger' }
+  return map[status] || 'info'
+}
+function presStatusText(status: number): string {
+  const map: Record<number, string> = { 0: '草稿', 1: '待审核', 2: '已审核', 3: '已发药', 4: '已作废' }
+  return map[status] || '未知'
+}
+function examCategoryText(cat: number): string {
+  const map: Record<number, string> = { 0: '实验室', 1: '影像', 2: '功能检查' }
+  return map[cat] || '--'
+}
+function examStatusTag(status: number): string {
+  const map: Record<number, string> = { 0: 'info', 1: 'warning', 2: 'primary', 3: 'success', 4: 'danger' }
+  return map[status] || 'info'
+}
+function examStatusText(status: number): string {
+  const map: Record<number, string> = { 0: '已开单', 1: '已缴费', 2: '检查中', 3: '已完成', 4: '已取消' }
+  return map[status] || '未知'
+}
 
 async function loadAppointmentInfo() {
   loading.value = true
@@ -312,14 +506,6 @@ async function handleComplete() {
   finally { completing.value = false }
 }
 
-function goPrescription() {
-  router.push(`/doctor/prescription/${currentRecordId.value}`)
-}
-
-function goExam() {
-  router.push(`/doctor/exam/${currentRecordId.value}`)
-}
-
 async function handleAiPreDiagnosis() {
   if (!patientInfo.value?.patientId) return
   diagnosing.value = true
@@ -362,6 +548,13 @@ function goReport() {
   max-width: 1100px;
 }
 
+.record-id-tag {
+  font-size: var(--cb-font-xs);
+  color: var(--cb-text-placeholder);
+  font-weight: 400;
+  margin-right: 8px;
+}
+
 .header-icon {
   color: var(--cb-primary);
   font-size: 18px;
@@ -379,7 +572,7 @@ function goReport() {
   min-width: 110px;
 }
 
-.tips-card {
+.side-sticky {
   position: sticky;
   top: 24px;
 }
@@ -488,5 +681,84 @@ function goReport() {
 
 .diag-fallback {
   padding: 16px 0;
+}
+
+.prescription-block {
+  background: var(--cb-background);
+  border-radius: var(--cb-radius-md);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.pres-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--cb-font-sm);
+  color: var(--cb-text-secondary);
+}
+
+.pres-date {
+  font-size: 12px;
+  color: var(--cb-text-placeholder);
+}
+
+.pres-empty {
+  text-align: center;
+  font-size: 12px;
+  color: var(--cb-text-placeholder);
+  padding: 8px 0;
+}
+
+/* 检查结果 */
+.exam-result-info {
+  background: var(--cb-background);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.exam-row {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.exam-row:last-child {
+  margin-bottom: 0;
+}
+
+.exam-label {
+  color: var(--cb-text-secondary);
+  font-weight: 500;
+}
+
+/* 影像缩略图 */
+.thumb-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.exam-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--cb-border-light);
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.exam-thumb:hover {
+  box-shadow: 0 0 0 2px var(--cb-primary);
+}
+
+.exam-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 </style>

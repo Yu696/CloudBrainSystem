@@ -17,6 +17,7 @@ import com.cloudbrain.service.ai.AiService;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PatientContextBuilder;
 import com.cloudbrain.service.ai.PromptTemplateService;
+import com.cloudbrain.service.image.StorageService;
 import com.cloudbrain.util.UUIDUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +28,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -62,6 +65,9 @@ public class AiServiceImpl implements AiService {
     private final TriageLogMapper triageLogMapper;
     private final PrescriptionAuditLogMapper prescriptionAuditLogMapper;
     private final UserMapper userMapper;
+    private final MedicalImageMapper medicalImageMapper;
+    private final StorageService storageService;
+    private final @org.springframework.beans.factory.annotation.Qualifier("visionRestTemplate") RestTemplate visionRestTemplate;
 
     // ==================== AI-01/02/03 智能分诊 ====================
 
@@ -471,15 +477,259 @@ public class AiServiceImpl implements AiService {
         aiCallLogMapper.updateById(log);
     }
 
-    // ==================== 影像诊断（预留） ====================
+    // ==================== 影像诊断（豆包视觉模型） ====================
+
+    /** 视觉分析 Prompt：要求 AI 以 JSON 格式返回结构化诊断结果 */
+    private static final String VISION_DIAGNOSIS_PROMPT =
+            "你是一位资深放射科医生。请分析这张医学影像，给出专业的诊断意见。\n" +
+            "请严格以 JSON 格式返回，不要包含 markdown 代码块标记。\n\n" +
+            "请返回如下 JSON 结构：\n" +
+            "{\n" +
+            "  \"findings\": {\n" +
+            "    \"summaryDetail\": \"影像描述和诊断意见\",\n" +
+            "    \"abnormalRegions\": [\n" +
+            "      {\n" +
+            "        \"location\": \"异常位置（如：右肺上叶）\",\n" +
+            "        \"size\": \"大小（如：1.2cm×0.8cm）\",\n" +
+            "        \"description\": \"异常描述\",\n" +
+            "        \"confidence\": 0.0\n" +
+            "      }\n" +
+            "    ]\n" +
+            "  },\n" +
+            "  \"confidenceScore\": 0.0\n" +
+            "}\n\n" +
+            "请确保：\n" +
+            "1. summaryDetail 包含完整的影像所见和诊断意见\n" +
+            "2. 如有多个异常发现，请分别列出\n" +
+            "3. confidenceScore 为 0-1 之间的数值，表示你对诊断的把握程度\n" +
+            "4. 如影像无明显异常，abnormalRegions 可为空数组";
 
     @Override
     public ImageDiagnosisVO imageDiagnosis(ImageDiagnosisRequest request) {
+        // Mock 模式
         if (aiConfig.isMockEnabled()) {
-            return ImageDiagnosisVO.fallback(request.getImageId());
+            return mockImageDiagnosis(request);
         }
-        // 预留：阶段三接入真实 AI 视觉模型
+
+        // 视觉 AI 模式（豆包）
+        if (aiConfig.isVisionEnabled()) {
+            try {
+                return callVisionApi(request);
+            } catch (Exception e) {
+                log.warn("AI 影像诊断调用失败，降级返回兜底结果: {}", e.getMessage());
+            }
+        }
+
         return ImageDiagnosisVO.fallback(request.getImageId());
+    }
+
+    /** 调用豆包视觉模型分析影像 */
+    @SuppressWarnings("unchecked")
+    private ImageDiagnosisVO callVisionApi(ImageDiagnosisRequest request) {
+        AiConfig.VisionConfig visionConfig = aiConfig.getVision();
+
+        // 配置日志（不输出完整 Key）
+        String maskedKey = visionConfig.getApiKey() != null && visionConfig.getApiKey().length() > 8
+                ? visionConfig.getApiKey().substring(0, 8) + "***"
+                : (visionConfig.getApiKey() != null ? visionConfig.getApiKey() : "未设置");
+        log.info("视觉 AI 配置: URL={}, Model={}, KeyPrefix={}", visionConfig.getApiUrl(), visionConfig.getModel(), maskedKey);
+
+        // 硬性检查：无效的 API Key 直接跳过，不发起 HTTP 请求
+        String apiKey = visionConfig.getApiKey();
+        if (apiKey == null || apiKey.isBlank() || apiKey.contains("${")) {
+            throw new AiUnavailableException("视觉 AI 未配置有效的 API Key");
+        }
+
+        // 1. 获取影像信息
+        MedicalImage image = medicalImageMapper.selectOne(
+                new LambdaQueryWrapper<MedicalImage>().eq(MedicalImage::getImageId, request.getImageId()));
+        if (image == null) {
+            throw new BusinessException("影像不存在");
+        }
+
+        // 2. 读取影像文件并转为 base64
+        byte[] imageBytes = storageService.retrieve(image.getFilePath());
+        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+        String mimeType = getImageMimeType(image.getImageType());
+
+        // 3. 构建视觉 API 请求体（OpenAI 兼容格式：content 为 text + image_url 数组）
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("model", visionConfig.getModel());
+
+        List<Map<String, Object>> messages = new ArrayList<>();
+        Map<String, Object> userMsg = new LinkedHashMap<>();
+        userMsg.put("role", "user");
+
+        List<Map<String, Object>> content = new ArrayList<>();
+
+        Map<String, Object> textPart = new LinkedHashMap<>();
+        textPart.put("type", "text");
+        textPart.put("text", VISION_DIAGNOSIS_PROMPT);
+        content.add(textPart);
+
+        Map<String, Object> imageUrlWrapper = new LinkedHashMap<>();
+        Map<String, String> urlMap = new LinkedHashMap<>();
+        urlMap.put("url", "data:" + mimeType + ";base64," + base64Image);
+        imageUrlWrapper.put("image_url", urlMap);
+        Map<String, Object> imagePart = new LinkedHashMap<>();
+        imagePart.put("type", "image_url");
+        imagePart.put("image_url", urlMap);
+        content.add(imagePart);
+
+        userMsg.put("content", content);
+        messages.add(userMsg);
+        requestBody.put("messages", messages);
+
+        // 4. 调用 API（Ollama 无鉴权，豆包需 Bearer Token）
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (visionConfig.getApiKey() != null && !visionConfig.getApiKey().isBlank()
+                && !visionConfig.getApiKey().contains("${")) {
+            headers.setBearerAuth(visionConfig.getApiKey());
+        }
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+        long startTime = System.currentTimeMillis();
+
+        ResponseEntity<Map> response;
+        try {
+            response = visionRestTemplate.postForEntity(
+                    visionConfig.getApiUrl(), entity, Map.class);
+        } catch (HttpClientErrorException e) {
+            String respBody = e.getResponseBodyAsString();
+            log.warn("视觉 API 调用失败(客户端错误): URL={}, 状态码={}, 响应体={}",
+                    visionConfig.getApiUrl(), e.getStatusCode(), respBody);
+            throw new AiUnavailableException("视觉 API 返回 " + e.getStatusCode() + ": " + respBody, e);
+        } catch (HttpServerErrorException e) {
+            String respBody = e.getResponseBodyAsString();
+            log.warn("视觉 API 调用失败(服务器错误): URL={}, 状态码={}, 响应体={}",
+                    visionConfig.getApiUrl(), e.getStatusCode(), respBody);
+            throw new AiUnavailableException("视觉 API 服务器错误 " + e.getStatusCode());
+        }
+
+        if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
+            throw new AiUnavailableException("视觉 API 返回非正常状态码: " + response.getStatusCode());
+        }
+
+        List<Map<String, Object>> choices = (List<Map<String, Object>>) response.getBody().get("choices");
+        if (choices == null || choices.isEmpty()) {
+            throw new AiResponseException("视觉 API 返回的 choices 为空");
+        }
+
+        Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+        if (message == null) {
+            throw new AiResponseException("视觉 API 返回的 message 为空");
+        }
+
+        String contentStr = (String) message.get("content");
+        if (contentStr == null || contentStr.isBlank()) {
+            throw new AiResponseException("视觉 API 返回的 content 为空");
+        }
+
+        // 5. 解析响应
+        ImageDiagnosisVO vo = parseVisionResponse(contentStr, request);
+        vo.setAiModel(visionConfig.getModel());
+
+        // 6. 统一日志
+        int responseMs = (int) (System.currentTimeMillis() - startTime);
+        saveAiCallLog(vo.getDiagnosisId(), 3, request.getPatientId(), request.getDoctorId(),
+                request.getImageId(), request.getImageId(), contentStr,
+                vo.getConfidenceScore(), vo.getAiModel(),
+                responseMs, 1, null);
+
+        return vo;
+    }
+
+    /** 解析视觉 AI 的 JSON 响应为 ImageDiagnosisVO */
+    @SuppressWarnings("unchecked")
+    private ImageDiagnosisVO parseVisionResponse(String rawResponse, ImageDiagnosisRequest request) {
+        String json = extractJson(rawResponse);
+        Map<String, Object> map;
+        try {
+            map = objectMapper.readValue(json, Map.class);
+        } catch (JsonProcessingException e) {
+            throw new AiResponseException("视觉 AI 响应 JSON 解析失败", e);
+        }
+
+        // 解析 findings
+        Object findingsObj = map.get("findings");
+        ImageDiagnosisVO.Findings findings = null;
+        if (findingsObj instanceof Map) {
+            Map<String, Object> findingsMap = (Map<String, Object>) findingsObj;
+            String summaryDetail = String.valueOf(findingsMap.getOrDefault("summaryDetail", ""));
+
+            List<ImageDiagnosisVO.AbnormalRegion> regions = new ArrayList<>();
+            List<Map<String, Object>> regionList = safeGetListOfMaps(findingsMap, "abnormalRegions");
+            for (Map<String, Object> r : regionList) {
+                regions.add(ImageDiagnosisVO.AbnormalRegion.builder()
+                        .location(String.valueOf(r.getOrDefault("location", "")))
+                        .size(String.valueOf(r.getOrDefault("size", "")))
+                        .description(String.valueOf(r.getOrDefault("description", "")))
+                        .confidence(toBigDecimal(r.get("confidence")))
+                        .build());
+            }
+
+            findings = ImageDiagnosisVO.Findings.builder()
+                    .summaryDetail(summaryDetail)
+                    .abnormalRegions(regions.isEmpty() ? null : regions)
+                    .build();
+        }
+
+        BigDecimal confidenceScore = toBigDecimal(map.get("confidenceScore"));
+
+        return ImageDiagnosisVO.builder()
+                .diagnosisId(UUIDUtil.generateDiagnosisId())
+                .imageId(request.getImageId())
+                .diagnosisType(request.getDiagnosisType())
+                .diagnosisTypeName("影像诊断")
+                .findings(findings)
+                .confidenceScore(confidenceScore)
+                .status(1)
+                .build();
+    }
+
+    /** 根据 imageType 返回 MIME 类型 */
+    private String getImageMimeType(Integer imageType) {
+        if (imageType == null) return "image/png";
+        return switch (imageType) {
+            case 1 -> "image/jpeg";
+            case 2 -> "image/png";
+            default -> "image/png";
+        };
+    }
+
+    private ImageDiagnosisVO mockImageDiagnosis(ImageDiagnosisRequest request) {
+        return ImageDiagnosisVO.builder()
+                .diagnosisId(UUIDUtil.generateDiagnosisId())
+                .imageId(request.getImageId())
+                .diagnosisType(request.getDiagnosisType())
+                .diagnosisTypeName("影像诊断")
+                .findings(ImageDiagnosisVO.Findings.builder()
+                        .summaryDetail("Mock 模式：影像分析结果。\n" +
+                                "右肺上叶可见一大小约 1.2cm×0.8cm 的磨玻璃结节，边界清晰，形态规则，未见明显分叶及毛刺征。\n" +
+                                "纵隔窗示气管及主支气管通畅，未见明显狭窄或阻塞。\n" +
+                                "心脏形态大小未见异常，纵隔未见明显肿大淋巴结。\n" +
+                                "建议：3-6 个月复查随诊，观察结节变化。")
+                        .abnormalRegions(List.of(
+                                ImageDiagnosisVO.AbnormalRegion.builder()
+                                        .location("右肺上叶")
+                                        .size("1.2cm×0.8cm")
+                                        .description("磨玻璃结节，边界清晰，形态规则")
+                                        .confidence(new BigDecimal("0.85"))
+                                        .build(),
+                                ImageDiagnosisVO.AbnormalRegion.builder()
+                                        .location("右肺上叶")
+                                        .size("0.3cm")
+                                        .description("微小钙化灶")
+                                        .confidence(new BigDecimal("0.62"))
+                                        .build()
+                        ))
+                        .build())
+                .confidenceScore(new BigDecimal("0.82"))
+                .status(1)
+                .aiModel("mock")
+                .build();
     }
 
     // ==================== Prompt 构建 ====================

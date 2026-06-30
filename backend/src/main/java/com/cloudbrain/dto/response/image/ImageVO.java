@@ -19,6 +19,7 @@ public class ImageVO {
     private Integer height;
     private String examinationId;
     private String patientId;
+    private String patientName;
     private String filePath;
     private Integer status;
     private String uploaderId;

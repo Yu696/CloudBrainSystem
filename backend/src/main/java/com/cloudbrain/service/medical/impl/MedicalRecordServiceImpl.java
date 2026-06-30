@@ -2,7 +2,6 @@ package com.cloudbrain.service.medical.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.MedicalRecordCreateRequest;
 import com.cloudbrain.dto.request.MedicalRecordUpdateRequest;
@@ -10,10 +9,12 @@ import com.cloudbrain.dto.response.MedicalRecordVO;
 import com.cloudbrain.entity.MedicalRecord;
 import com.cloudbrain.entity.Appointment;
 import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.entity.ExaminationOrder;
 import com.cloudbrain.entity.Patient;
 import com.cloudbrain.entity.User;
 import com.cloudbrain.mapper.AppointmentMapper;
 import com.cloudbrain.mapper.DoctorMapper;
+import com.cloudbrain.mapper.ExaminationOrderMapper;
 import com.cloudbrain.mapper.MedicalRecordMapper;
 import com.cloudbrain.mapper.PatientMapper;
 import com.cloudbrain.mapper.UserMapper;
@@ -34,10 +35,30 @@ public class MedicalRecordServiceImpl extends ServiceImpl<MedicalRecordMapper, M
     private final PatientMapper patientMapper;
     private final DoctorMapper doctorMapper;
     private final UserMapper userMapper;
+    private final ExaminationOrderMapper examinationOrderMapper;
 
     @Override
     @Transactional
     public MedicalRecordVO createRecord(MedicalRecordCreateRequest request) {
+        // 检查该预约是否已有病历，有则更新
+        if (request.getAppointmentId() != null && !request.getAppointmentId().isBlank()) {
+            MedicalRecord existing = this.getOne(new LambdaQueryWrapper<MedicalRecord>()
+                    .eq(MedicalRecord::getAppointmentId, request.getAppointmentId()));
+            if (existing != null) {
+                existing.setChiefComplaint(request.getChiefComplaint());
+                if (request.getPresentIllness() != null) existing.setPresentIllness(request.getPresentIllness());
+                if (request.getPastHistory() != null) existing.setPastHistory(request.getPastHistory());
+                if (request.getPersonalHistory() != null) existing.setPersonalHistory(request.getPersonalHistory());
+                if (request.getFamilyHistory() != null) existing.setFamilyHistory(request.getFamilyHistory());
+                if (request.getPhysicalExam() != null) existing.setPhysicalExam(request.getPhysicalExam());
+                if (request.getAuxiliaryExam() != null) existing.setAuxiliaryExam(request.getAuxiliaryExam());
+                if (request.getDiagnosis() != null) existing.setDiagnosis(request.getDiagnosis());
+                if (request.getTreatmentOpinion() != null) existing.setTreatmentOpinion(request.getTreatmentOpinion());
+                updateById(existing);
+                return MedicalRecordVO.from(existing);
+            }
+        }
+
         MedicalRecord record = new MedicalRecord();
         record.setRecordId(UUIDUtil.generateRecordId());
         record.setPatientId(request.getPatientId());
@@ -143,6 +164,16 @@ public class MedicalRecordServiceImpl extends ServiceImpl<MedicalRecordMapper, M
                 apt.setStatus(2); // 已完成
                 appointmentMapper.updateById(apt);
             }
+        }
+
+        // 状态流转：将该病历下所有"检查中(2)"的检查单改为"已完成(3)"
+        List<ExaminationOrder> examOrders = examinationOrderMapper.selectList(
+                new LambdaQueryWrapper<ExaminationOrder>()
+                        .eq(ExaminationOrder::getRecordId, recordId)
+                        .eq(ExaminationOrder::getStatus, 2));
+        for (ExaminationOrder eo : examOrders) {
+            eo.setStatus(3);
+            examinationOrderMapper.updateById(eo);
         }
     }
 

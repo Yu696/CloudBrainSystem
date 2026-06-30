@@ -27,9 +27,7 @@
 
                 <el-form-item label="检查项目" prop="examName">
                   <el-select v-model="form.examName" placeholder="请选择检查项目" filterable style="width: 100%">
-                    <el-option-group v-for="group in examOptions" :key="group.label" :label="group.label">
-                      <el-option v-for="item in group.options" :key="item" :label="item" :value="item" />
-                    </el-option-group>
+                    <el-option v-for="item in filteredExamOptions" :key="item" :label="item" :value="item" />
                   </el-select>
                 </el-form-item>
 
@@ -84,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Search, InfoFilled, Edit, Delete } from '@element-plus/icons-vue'
@@ -113,6 +111,16 @@ const rules = {
   examCategory: [{ required: true, message: '请选择检查类别', trigger: 'change' }],
   examName: [{ required: true, message: '请选择或输入检查项目', trigger: 'blur' }]
 }
+
+const filteredExamOptions = computed(() => {
+  const items = examOptions[form.examCategory]
+  return items ? items.options : []
+})
+
+// 切换类别时清空已选项目
+watch(() => form.examCategory, () => {
+  form.examName = ''
+})
 
 const examOptions = [
   {

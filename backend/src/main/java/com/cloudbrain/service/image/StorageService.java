@@ -2,6 +2,8 @@ package com.cloudbrain.service.image;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
+
 public interface StorageService {
 
     /** 存储文件，返回存储路径 */
@@ -9,6 +11,9 @@ public interface StorageService {
 
     /** 读取文件为字节数组 */
     byte[] retrieve(String filePath);
+
+    /** 读取文件为输入流 */
+    InputStream retrieveAsStream(String filePath);
 
     /** 删除文件 */
     void delete(String filePath);

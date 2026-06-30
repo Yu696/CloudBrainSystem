@@ -42,6 +42,9 @@ public class AiConfig {
     /** Mock 模式配置 */
     private Mock mock = new Mock();
 
+    /** 视觉 AI 配置（豆包/Doubao，用于影像分析） */
+    private VisionConfig vision = new VisionConfig();
+
     @Data
     public static class Fallback {
         private boolean enabled = true;
@@ -64,6 +67,14 @@ public class AiConfig {
         private boolean enabled = false;
     }
 
+    @Data
+    public static class VisionConfig {
+        private String apiKey;
+        private String apiUrl = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+        private String model = "ep-20260629234720-b6dtg";
+        private int timeout = 60000;
+    }
+
     /** AI 调用专用 RestTemplate，独立超时配置 */
     @Bean
     public RestTemplate aiRestTemplate() {
@@ -73,8 +84,27 @@ public class AiConfig {
         return new RestTemplate(factory);
     }
 
+    /** 视觉 AI 调用专用 RestTemplate（更长超时） */
+    @Bean
+    public RestTemplate visionRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeout);
+        factory.setReadTimeout(vision.getTimeout());
+        return new RestTemplate(factory);
+    }
+
     /** Mock 模式是否生效（配置开启 或 API Key 为空） */
     public boolean isMockEnabled() {
         return mock.isEnabled() || apiKey == null || apiKey.isBlank();
+    }
+
+    /** 视觉 AI 是否已配置（配置了 API Key 或改用其他 API 地址） */
+    public boolean isVisionEnabled() {
+        // 防止 Spring 未解析的占位符被误认为有效 key
+        String key = vision.getApiKey();
+        boolean hasValidKey = key != null && !key.isBlank() && !key.contains("${");
+        return hasValidKey
+                || (vision.getApiUrl() != null
+                    && !vision.getApiUrl().equals("https://ark.cn-beijing.volces.com/api/v3/chat/completions"));
     }
 }

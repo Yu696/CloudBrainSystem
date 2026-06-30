@@ -87,3 +87,22 @@ export function listExaminationOrdersApi(recordId: string) {
 export function getExaminationResultApi(orderId: string) {
   return request.get<any>('/examination/result', { params: { orderId } })
 }
+
+/** 保存检查结果（新增或更新） */
+export function saveExaminationResultApi(data: {
+  orderId?: string
+  imageId?: string
+  resultData?: string
+  referenceRange?: string
+  isAbnormal?: number
+  doctorOpinion?: string
+  reportFileUrl?: string
+  aiAnalysis?: string
+}) {
+  return request.post<any>('/examination/result', data)
+}
+
+/** 影像检查单列表（医生端上传影像用） */
+export function listImagingOrdersApi(doctorId?: string) {
+  return request.get<any[]>('/examination/imaging-orders', { params: { doctorId } })
+}

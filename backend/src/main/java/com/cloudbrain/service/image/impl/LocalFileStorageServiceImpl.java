@@ -3,10 +3,12 @@ package com.cloudbrain.service.image.impl;
 import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.service.image.StorageService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,6 +17,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 @Service
+@ConditionalOnProperty(name = "storage.type", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorageServiceImpl implements StorageService {
 
     @Value("${storage.base-path:./data/cloudbrain/images}")
@@ -48,6 +51,19 @@ public class LocalFileStorageServiceImpl implements StorageService {
                 throw new BusinessException("文件不存在");
             }
             return Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw new BusinessException("文件读取失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public InputStream retrieveAsStream(String filePath) {
+        try {
+            Path path = Paths.get(basePath, filePath);
+            if (!Files.exists(path)) {
+                throw new BusinessException("文件不存在");
+            }
+            return Files.newInputStream(path);
         } catch (IOException e) {
             throw new BusinessException("文件读取失败: " + e.getMessage());
         }

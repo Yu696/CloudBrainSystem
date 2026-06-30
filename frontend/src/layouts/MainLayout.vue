@@ -165,17 +165,13 @@
               <el-icon><Picture /></el-icon>
               <span>影像管理</span>
             </template>
-            <el-menu-item index="/image/upload">
-              <el-icon><Upload /></el-icon>
-              <template #title>上传影像</template>
+            <el-menu-item index="/doctor/exam-images">
+              <el-icon><Notebook /></el-icon>
+              <template #title>影像检查单</template>
             </el-menu-item>
             <el-menu-item index="/image/list">
               <el-icon><List /></el-icon>
               <template #title>影像列表</template>
-            </el-menu-item>
-            <el-menu-item index="/image/compare">
-              <el-icon><Rank /></el-icon>
-              <template #title>影像对比</template>
             </el-menu-item>
           </el-sub-menu>
 
@@ -269,11 +265,7 @@
 
       <!-- 内容区 -->
       <el-main class="layout-main">
-        <router-view v-slot="{ Component }">
-          <transition name="fade-slide" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
+        <router-view />
       </el-main>
     </el-container>
   </el-container>
@@ -287,7 +279,7 @@ import {
   Fold, Expand, ArrowDown, SwitchButton,
   Calendar, HomeFilled, List, FirstAidKit, Document, Plus, Clock,
   MagicStick, Search, Reading, DataAnalysis,
-  Picture, Upload, Rank, Goods, DataBoard, TakeawayBox, Wallet
+  Picture, Upload, Rank, Goods, DataBoard, TakeawayBox, Notebook, Wallet
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'

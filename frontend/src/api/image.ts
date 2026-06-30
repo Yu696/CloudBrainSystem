@@ -45,12 +45,22 @@ export function deleteImageApi(imageId: string) {
 export function annotateImageApi(data: {
   imageId: string
   annotationType: string
-  coordinates: Record<string, any>
+  coordinates: string
   label?: string
   measurement?: string
   description?: string
 }) {
   return request.post<any>('/image/annotate', data)
+}
+
+/** 查询影像标注列表 */
+export function listAnnotationsApi(imageId: string) {
+  return request.get<any[]>('/image/annotate/list', { params: { imageId } })
+}
+
+/** 删除影像标注 */
+export function deleteAnnotationApi(annotationId: string) {
+  return request.delete<any>('/image/annotate/delete', { params: { annotationId } })
 }
 
 /** 格式转换（IM-09） */
