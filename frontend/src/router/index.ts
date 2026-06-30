@@ -265,10 +265,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'AI 调用监控', admin: true }
       },
       // M05 影像管理
-      { path: 'image/upload', name: 'ImageUpload', component: () => import('@/views/image/ImageUploadView.vue'), meta: { title: '影像上传' } },
+      { path: 'image/upload/:orderId?', name: 'ImageUpload', component: () => import('@/views/image/ImageUploadView.vue'), meta: { title: '影像上传' } },
       { path: 'image/list', name: 'ImageList', component: () => import('@/views/image/ImageListView.vue'), meta: { title: '影像列表' } },
       { path: 'image/viewer/:imageId', name: 'ImageViewer', component: () => import('@/views/image/ImageViewerView.vue'), meta: { title: '影像预览' } },
       { path: 'image/compare', name: 'ImageCompare', component: () => import('@/views/image/ImageCompareView.vue'), meta: { title: '影像对比' } },
+      // 医生影像检查单
+      { path: 'doctor/exam-images', name: 'ExamImageList', component: () => import('@/views/doctor/ExamImageList.vue'), meta: { title: '影像检查单' } },
 
       // M07 药库管理
       { path: 'pharmacy/drugs', name: 'DrugList', component: () => import('@/views/pharmacy/DrugListView.vue'), meta: { title: '药品管理' } },

@@ -3,6 +3,7 @@ package com.cloudbrain.controller.medical;
 import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.dto.request.ExaminationOrderCreateRequest;
+import com.cloudbrain.dto.request.ExaminationResultCreateRequest;
 import com.cloudbrain.dto.response.ExaminationOrderVO;
 import com.cloudbrain.dto.response.ExaminationResultVO;
 import com.cloudbrain.service.medical.ExaminationService;
@@ -54,6 +55,12 @@ public class ExaminationController extends BaseController {
         return success("删除成功");
     }
 
+    @Operation(summary = "影像检查单列表（医生端上传影像用）")
+    @GetMapping("/imaging-orders")
+    public Result<List<ExaminationOrderVO>> listImagingOrders(@RequestParam(required = false) String doctorId) {
+        return success(examinationService.listImagingOrders(doctorId));
+    }
+
     @Operation(summary = "检查结果")
     @GetMapping("/result")
     public Result<ExaminationResultVO> result(@RequestParam String orderId) {
@@ -65,5 +72,11 @@ public class ExaminationController extends BaseController {
     public Result<String> pay(@RequestParam String orderId) {
         examinationService.payOrder(orderId);
         return success("支付成功");
+    }
+
+    @Operation(summary = "保存检查结果（新增或更新）")
+    @PostMapping("/result")
+    public Result<ExaminationResultVO> saveResult(@Valid @RequestBody ExaminationResultCreateRequest request) {
+        return success(examinationService.saveResult(request));
     }
 }

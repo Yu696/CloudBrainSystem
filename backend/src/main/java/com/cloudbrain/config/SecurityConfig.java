@@ -38,7 +38,8 @@ public class SecurityConfig {
                                 "/api/doctor/list",
                                 "/api/doctor/detail",
                                 "/api/schedule/query",
-                                "/api/schedule/available"
+                                "/api/schedule/available",
+                                "/api/image/preview"   // 影像预览：img 标签不携带 token
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

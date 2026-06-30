@@ -13,6 +13,7 @@ public class ExaminationOrderVO {
     private String orderId;
     private String recordId;
     private String patientId;
+    private String patientName;
     private String doctorId;
     private Integer examCategory;
     private String examName;
@@ -27,6 +28,7 @@ public class ExaminationOrderVO {
                 .orderId(o.getOrderId())
                 .recordId(o.getRecordId())
                 .patientId(o.getPatientId())
+                .patientName(null)
                 .doctorId(o.getDoctorId())
                 .examCategory(o.getExamCategory())
                 .examName(o.getExamName())

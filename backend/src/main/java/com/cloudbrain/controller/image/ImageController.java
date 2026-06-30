@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -75,24 +76,24 @@ public class ImageController extends BaseController {
             " - 医生默认返回自己开单的影像，管理员可查看全部")
     @GetMapping("/list")
     public Result<PageResult<ImageVO>> list(
-            @Parameter(description = "按患者筛选") @RequestParam(required = false) String patientId,
+            @Parameter(description = "按患者 ID 筛选") @RequestParam(required = false) String patientId,
+            @Parameter(description = "按患者姓名筛选") @RequestParam(required = false) String patientName,
             @Parameter(description = "按检查单筛选") @RequestParam(required = false) String examinationId,
             @Parameter(description = "按设备筛选") @RequestParam(required = false) String modality,
             @Parameter(description = "仅看自己开单的影像（医生默认 true）") @RequestParam(required = false) Boolean myExams,
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") int pageSize) {
-        return success(imageService.list(patientId, examinationId, modality, myExams, page, pageSize));
+        return success(imageService.list(patientId, patientName, examinationId, modality, myExams, page, pageSize));
     }
 
     // ==================== IM-04 影像预览 ====================
 
     @Operation(summary = "影像预览（IM-04）")
     @GetMapping("/preview")
-    public ResponseEntity<byte[]> preview(@Parameter(description = "影像 ID") @RequestParam String imageId) {
+    public ResponseEntity<InputStreamResource> preview(@Parameter(description = "影像 ID") @RequestParam String imageId) {
         ImageVO info = imageService.getInfo(imageId);
-        byte[] data = imageService.preview(imageId);
         String contentType = switch (info.getImageType()) {
-            case 0 -> "image/png";  // DICOM → PNG preview
+            case 0 -> "image/png";
             case 1 -> "image/jpeg";
             case 2 -> "image/png";
             default -> "application/octet-stream";
@@ -100,7 +101,7 @@ public class ImageController extends BaseController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header("Content-Disposition", "inline; filename=\"" + imageId + "\"")
-                .body(data);
+                .body(new InputStreamResource(imageService.previewAsStream(imageId)));
     }
 
     // ==================== IM-05 影像删除 ====================

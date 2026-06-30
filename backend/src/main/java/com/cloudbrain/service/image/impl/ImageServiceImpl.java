@@ -29,6 +29,7 @@ public class ImageServiceImpl implements ImageService {
     private final DoctorMapper doctorMapper;
     private final ExaminationOrderMapper examinationOrderMapper;
     private final ConversionLogMapper conversionLogMapper;
+    private final PatientMapper patientMapper;
     private final StorageService storageService;
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("dcm", "dicom", "jpg", "jpeg", "png");
@@ -58,6 +59,21 @@ public class ImageServiceImpl implements ImageService {
         image.setStatus(1);
         medicalImageMapper.insert(image);
 
+        // 状态流转：已缴费(1) → 检查中(2)；仅已缴费或检查中的检查单可上传影像
+        if (examinationId != null && !examinationId.isBlank()) {
+            ExaminationOrder order = examinationOrderMapper.selectOne(
+                    new LambdaQueryWrapper<ExaminationOrder>()
+                            .eq(ExaminationOrder::getOrderId, examinationId));
+            if (order != null) {
+                if (order.getStatus() == 1) {
+                    order.setStatus(2);
+                    examinationOrderMapper.updateById(order);
+                } else if (order.getStatus() != 2) {
+                    throw new BusinessException("该检查单状态不允许上传影像，仅已缴费的检查单可上传");
+                }
+            }
+        }
+
         return ImageVO.fromEntity(image);
     }
 
@@ -82,7 +98,7 @@ public class ImageServiceImpl implements ImageService {
     }
 
     @Override
-    public PageResult<ImageVO> list(String patientId, String examinationId, String modality, Boolean myExams, int page, int pageSize) {
+    public PageResult<ImageVO> list(String patientId, String patientName, String examinationId, String modality, Boolean myExams, int page, int pageSize) {
         LambdaQueryWrapper<MedicalImage> wrapper = new LambdaQueryWrapper<>();
 
         // 医生角色默认只看自己开单的影像
@@ -100,6 +116,16 @@ public class ImageServiceImpl implements ImageService {
         if (patientId != null && !patientId.isBlank()) {
             wrapper.eq(MedicalImage::getPatientId, patientId);
         }
+        if (patientName != null && !patientName.isBlank()) {
+            // 通过姓名查找患者 ID
+            List<Patient> patients = patientMapper.selectList(
+                    new LambdaQueryWrapper<Patient>().like(Patient::getName, patientName));
+            List<String> pids = patients.stream().map(Patient::getPatientId).toList();
+            if (pids.isEmpty()) {
+                return PageResult.of(0, page, pageSize, List.of());
+            }
+            wrapper.in(MedicalImage::getPatientId, pids);
+        }
         if (modality != null && !modality.isBlank()) {
             wrapper.eq(MedicalImage::getModality, modality);
         }
@@ -107,27 +133,59 @@ public class ImageServiceImpl implements ImageService {
 
         Page<MedicalImage> result = medicalImageMapper.selectPage(new Page<>(page, pageSize), wrapper);
         List<ImageVO> records = result.getRecords().stream().map(ImageVO::fromEntity).toList();
+
+        // 填充 patientName
+        populatePatientNames(records);
+
         return PageResult.of(result.getTotal(), page, pageSize, records);
+    }
+
+    private void populatePatientNames(List<ImageVO> records) {
+        if (records.isEmpty()) return;
+        Set<String> pids = records.stream().map(ImageVO::getPatientId).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        if (pids.isEmpty()) return;
+        List<Patient> patients = patientMapper.selectList(
+                new LambdaQueryWrapper<Patient>().in(Patient::getPatientId, pids));
+        Map<String, String> nameMap = patients.stream()
+                .collect(java.util.stream.Collectors.toMap(Patient::getPatientId, Patient::getName, (a, b) -> a));
+        for (ImageVO vo : records) {
+            if (vo.getPatientId() != null) {
+                vo.setPatientName(nameMap.get(vo.getPatientId()));
+            }
+        }
     }
 
     @Override
     public byte[] preview(String imageId) {
+        MedicalImage image = getImageOrThrow(imageId);
+        return storageService.retrieve(image.getFilePath());
+    }
+
+    @Override
+    public java.io.InputStream previewAsStream(String imageId) {
+        MedicalImage image = getImageOrThrow(imageId);
+        return storageService.retrieveAsStream(image.getFilePath());
+    }
+
+    @Override
+    public String getPreviewUrl(String imageId) {
+        MedicalImage image = getImageOrThrow(imageId);
+        return storageService.getAccessUrl(image.getFilePath());
+    }
+
+    private MedicalImage getImageOrThrow(String imageId) {
         MedicalImage image = medicalImageMapper.selectOne(
                 new LambdaQueryWrapper<MedicalImage>().eq(MedicalImage::getImageId, imageId));
         if (image == null) {
             throw new BusinessException("影像不存在");
         }
-        return storageService.retrieve(image.getFilePath());
+        return image;
     }
 
     @Override
     @Transactional
     public void delete(String imageId) {
-        MedicalImage image = medicalImageMapper.selectOne(
-                new LambdaQueryWrapper<MedicalImage>().eq(MedicalImage::getImageId, imageId));
-        if (image == null) {
-            throw new BusinessException("影像不存在");
-        }
+        MedicalImage image = getImageOrThrow(imageId);
         image.setStatus(0);
         medicalImageMapper.updateById(image);
     }
