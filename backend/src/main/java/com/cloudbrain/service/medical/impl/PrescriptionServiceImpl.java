@@ -6,9 +6,11 @@ import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.PrescriptionCreateRequest;
 import com.cloudbrain.dto.response.PrescriptionItemVO;
 import com.cloudbrain.dto.response.PrescriptionVO;
+import com.cloudbrain.entity.Drug;
 import com.cloudbrain.entity.MedicalRecord;
 import com.cloudbrain.entity.Prescription;
 import com.cloudbrain.entity.PrescriptionItem;
+import com.cloudbrain.mapper.DrugMapper;
 import com.cloudbrain.mapper.MedicalRecordMapper;
 import com.cloudbrain.mapper.PrescriptionItemMapper;
 import com.cloudbrain.mapper.PrescriptionMapper;
@@ -28,6 +30,7 @@ public class PrescriptionServiceImpl extends ServiceImpl<PrescriptionMapper, Pre
 
     private final MedicalRecordMapper medicalRecordMapper;
     private final PrescriptionItemMapper prescriptionItemMapper;
+    private final DrugMapper drugMapper;
 
     @Override
     @Transactional
@@ -162,11 +165,15 @@ public class PrescriptionServiceImpl extends ServiceImpl<PrescriptionMapper, Pre
 
         PrescriptionVO vo = PrescriptionVO.from(prescription);
 
-        // 查询处方明细
+        // 查询处方明细（补充 drug 表信息）
         List<PrescriptionItem> items = prescriptionItemMapper.selectList(
                 new LambdaQueryWrapper<PrescriptionItem>()
                         .eq(PrescriptionItem::getPrescriptionId, prescriptionId));
-        vo.setItems(items.stream().map(PrescriptionItemVO::from).toList());
+        vo.setItems(items.stream().map(item -> {
+            Drug drug = drugMapper.selectOne(
+                    new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, item.getDrugId()));
+            return PrescriptionItemVO.from(item, drug);
+        }).toList());
 
         return vo;
     }

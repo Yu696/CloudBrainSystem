@@ -42,6 +42,11 @@ export function searchDrugApi(params: {
   return request.get<any>('/drug/search', { params })
 }
 
+/** 药品详情 */
+export function getDrugDetailApi(drugId: string) {
+  return request.get<any>('/drug/detail', { params: { drugId } })
+}
+
 /** 查询库存（DR-05） */
 export function drugStockApi(drugId: string) {
   return request.get<any>('/drug/stock', { params: { drugId } })
