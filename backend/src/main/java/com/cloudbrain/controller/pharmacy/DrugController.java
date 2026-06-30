@@ -6,6 +6,9 @@ import com.cloudbrain.dto.PageResult;
 import com.cloudbrain.dto.request.pharmacy.DispenseRequest;
 import com.cloudbrain.dto.request.pharmacy.DrugAddRequest;
 import com.cloudbrain.dto.request.pharmacy.DrugUpdateRequest;
+import com.cloudbrain.dto.request.pharmacy.StockAdjustRequest;
+import com.cloudbrain.dto.request.pharmacy.DestroyExpiredRequest;
+import com.cloudbrain.dto.request.pharmacy.TransferStockRequest;
 import com.cloudbrain.dto.request.pharmacy.WarehouseRequest;
 import com.cloudbrain.dto.response.pharmacy.DispenseResultVO;
 import com.cloudbrain.dto.response.pharmacy.DrugVO;
@@ -127,6 +130,32 @@ public class DrugController extends BaseController {
         return success(inventoryService.getStock(drugId));
     }
 
+    @Operation(summary = "库存列表（分页）")
+    @GetMapping("/stock/list")
+    public Result<PageResult<StockVO>> stockList(
+            @Parameter(description = "仓库 ID") @RequestParam(required = false) String warehouseId,
+            @Parameter(description = "关键词（药品ID/名称/编码）") @RequestParam(required = false) String keyword,
+            @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int pageSize) {
+        return success(inventoryService.listByWarehouse(warehouseId, keyword, page, pageSize));
+    }
+
+    @Operation(summary = "销毁过期药品（库存置 0）")
+    @PutMapping("/stock/destroy-expired")
+    public Result<String> destroyExpired(@Valid @RequestBody DestroyExpiredRequest request) {
+        inventoryService.destroyExpired(request.getDrugId(), request.getWarehouseId(), request.getBatchNo());
+        return success("销毁成功");
+    }
+
+    @Operation(summary = "库存转移（调拨）")
+    @PutMapping("/stock/transfer")
+    public Result<String> transferStock(@Valid @RequestBody TransferStockRequest request) {
+        inventoryService.transferStock(
+                request.getDrugId(), request.getFromWarehouseId(),
+                request.getToWarehouseId(), request.getQuantity(), request.getBatchNo());
+        return success("转移成功");
+    }
+
     // ==================== DR-06 库存预警 ====================
 
     @Operation(summary = "库存预警（DR-06）")
@@ -143,12 +172,31 @@ public class DrugController extends BaseController {
         return success("处理成功");
     }
 
+    @Operation(summary = "删除预警记录")
+    @DeleteMapping("/alert/{alertId}")
+    public Result<String> deleteAlert(@Parameter(description = "预警 ID") @PathVariable Long alertId) {
+        inventoryService.deleteAlert(alertId);
+        return success("删除成功");
+    }
+
     // ==================== DR-07 发药出库 ====================
 
     @Operation(summary = "发药出库（DR-07）")
     @PostMapping("/dispense")
     public Result<DispenseResultVO> dispense(@Valid @RequestBody DispenseRequest request) {
         return success(dispenseService.dispense(request));
+    }
+
+    // ==================== DR-07b 库存调整 ====================
+
+    @Operation(summary = "调整库存（正数入库，负数出库）")
+    @PutMapping("/stock/adjust")
+    public Result<String> adjustStock(@Valid @RequestBody StockAdjustRequest request) {
+        inventoryService.adjustStock(request.getDrugId(), request.getQuantity(),
+                request.getWarehouseId(), request.getBatchNo(),
+                request.getProductionDate(), request.getExpiryDate(),
+                request.getMinStock(), request.getMaxStock());
+        return success("库存调整成功");
     }
 
     // ==================== DR-08 取药单打印 ====================

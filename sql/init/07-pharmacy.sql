@@ -48,7 +48,7 @@ CREATE TABLE `drug_stock` (
     `create_time`     DATETIME        NOT NULL DEFAULT NOW()   COMMENT '创建时间',
     `update_time`     DATETIME        NOT NULL DEFAULT NOW() ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_drug_id` (`drug_id`),
+    UNIQUE KEY `uk_drug_warehouse_batch` (`drug_id`, `warehouse_id`, `batch_no`),
     KEY `idx_expiry_date` (`expiry_date`),
     KEY `idx_warehouse_id` (`warehouse_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='药品库存表';
@@ -90,6 +90,7 @@ CREATE TABLE `ship_record` (
 CREATE TABLE `stock_alert` (
     `id`             BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键',
     `drug_id`        VARCHAR(32)     NOT NULL                 COMMENT '药品 ID',
+    `warehouse_id`   VARCHAR(32)     DEFAULT NULL             COMMENT '仓库 ID',
     `alert_type`     TINYINT         NOT NULL                 COMMENT '预警类型：0=低库存 1=过期预警 2=库存积压',
     `current_stock`  INT             NOT NULL                 COMMENT '当前库存',
     `threshold`      INT             NOT NULL                 COMMENT '预警阈值',
@@ -100,6 +101,7 @@ CREATE TABLE `stock_alert` (
     `create_time`    DATETIME        NOT NULL DEFAULT NOW()   COMMENT '创建时间',
     PRIMARY KEY (`id`),
     KEY `idx_drug_id` (`drug_id`),
+    KEY `idx_warehouse_id` (`warehouse_id`),
     KEY `idx_alert_type` (`alert_type`),
     KEY `idx_is_handled` (`is_handled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='库存预警表';

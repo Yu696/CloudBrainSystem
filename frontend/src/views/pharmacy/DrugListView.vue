@@ -49,7 +49,7 @@
     <!-- 表格 -->
     <div class="cb-card">
       <el-table :data="drugList" v-loading="loading" stripe style="width: 100%">
-        <el-table-column prop="drugCode" label="药品编码" width="140" />
+        <el-table-column prop="drugId" label="药品 ID" width="140" />
         <el-table-column prop="drugName" label="药品名称" width="140" />
         <el-table-column prop="genericName" label="通用名" width="140" />
         <el-table-column prop="spec" label="规格" width="120" />
