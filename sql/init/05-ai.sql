@@ -6,7 +6,7 @@
 USE cloudbrain;
 
 -- 1. 智能分诊记录表
-CREATE TABLE `triage_log` (
+05CREATE TABLE `triage_log` (
     `id`                        BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键',
     `triage_id`                 VARCHAR(32)     NOT NULL                 COMMENT '分诊唯一标识',
     `patient_id`                VARCHAR(32)     NOT NULL                 COMMENT '患者 ID',

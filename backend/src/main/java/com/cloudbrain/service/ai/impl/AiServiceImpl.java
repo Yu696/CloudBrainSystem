@@ -1170,11 +1170,37 @@ public class AiServiceImpl implements AiService {
 
         String overallResult = String.valueOf(map.getOrDefault("overallResult", "MANUAL"));
 
+        // 预处理请求药品：drugId → realName，用于替换 AI 编造的药名
+        Map<String, String> reqDrugNames = new LinkedHashMap<>();
+        List<String> reqDrugNameList = new ArrayList<>();
+        for (PrescriptionCheckRequest.DrugItem di : request.getItems()) {
+            boolean valid = di.getDrugName() != null && !di.getDrugName().isBlank();
+            reqDrugNames.put(di.getDrugId(), valid ? di.getDrugName() : null);
+            if (valid) reqDrugNameList.add(di.getDrugName());
+        }
+
         List<PrescriptionAuditVO.AuditItem> auditItems = new ArrayList<>();
         List<Map<String, Object>> itemList = safeGetListOfMaps(map, "items");
-        for (Map<String, Object> item : itemList) {
+
+        for (int i = 0; i < itemList.size(); i++) {
+            Map<String, Object> aiItem = itemList.get(i);
+            String aiDrugName = String.valueOf(aiItem.getOrDefault("drugName", ""));
+
+            // 尝试用请求中的真实药名替换 AI 返回值
+            String displayName = aiDrugName;
+            // 如果 AI 返回的药名不在请求列表中（是患者当前用药等），尝试匹配
+            if (i < request.getItems().size()) {
+                PrescriptionCheckRequest.DrugItem reqItem = request.getItems().get(i);
+                String realName = reqItem.getDrugName();
+                if (realName != null && !realName.isBlank()) {
+                    displayName = realName;
+                } else {
+                    displayName = "处方药品 " + (i + 1);
+                }
+            }
+
             List<PrescriptionAuditVO.AuditCheck> checks = new ArrayList<>();
-            List<Map<String, Object>> checkList = safeGetListOfMaps(item, "checks");
+            List<Map<String, Object>> checkList = safeGetListOfMaps(aiItem, "checks");
             for (Map<String, Object> c : checkList) {
                 checks.add(PrescriptionAuditVO.AuditCheck.builder()
                         .checkType(String.valueOf(c.getOrDefault("checkType", "")))
@@ -1182,10 +1208,11 @@ public class AiServiceImpl implements AiService {
                         .detail(String.valueOf(c.getOrDefault("detail", "")))
                         .build());
             }
+
             auditItems.add(PrescriptionAuditVO.AuditItem.builder()
-                    .drugName(String.valueOf(item.getOrDefault("drugName", "")))
-                    .result(String.valueOf(item.getOrDefault("result", "PASS")))
-                    .resultName(String.valueOf(item.getOrDefault("resultName", "")))
+                    .drugName(displayName)
+                    .result(String.valueOf(aiItem.getOrDefault("result", "WARNING")))
+                    .resultName(String.valueOf(aiItem.getOrDefault("resultName", "")))
                     .checks(checks)
                     .build());
         }
