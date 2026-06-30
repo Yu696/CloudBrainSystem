@@ -150,9 +150,14 @@ public class InventoryServiceImpl implements InventoryService {
         List<StockAlertVO> result = new ArrayList<>();
         for (StockAlert alert : alerts) {
             Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, alert.getDrugId()));
-            Integer realStock = alert.getAlertType() == 1
-                    ? getTotalStock(alert.getDrugId(), alert.getWarehouseId())
-                    : getBatchStock(alert.getDrugId(), alert.getWarehouseId(), alert.getBatchNo());
+            Integer realStock = getBatchStock(alert.getDrugId(), alert.getWarehouseId(), alert.getBatchNo());
+            // 同步更新持久化的 currentStock、threshold 和 alertMessage，保证 DB 与实时一致
+            if (realStock != null && !realStock.equals(alert.getCurrentStock())) {
+                alert.setCurrentStock(realStock);
+                if (alert.getAlertType() == 1) alert.setThreshold(0);
+                alert.setAlertMessage(buildAlertMessage(alert, drug, realStock));
+                stockAlertMapper.updateById(alert);
+            }
             String warehouseName = getWarehouseName(alert.getWarehouseId());
             result.add(StockAlertVO.builder()
                     .id(alert.getId())
@@ -189,8 +194,8 @@ public class InventoryServiceImpl implements InventoryService {
                         .alertType(1)
                         .alertTypeName(StockAlertVO.alertTypeName(1))
                         .currentStock(es.getCurrentStock())
-                        .threshold(es.getCurrentStock())
-                        .alertMessage((drug != null ? drug.getDrugName() : "") + "（仓库: " + (warehouseName != null ? warehouseName : es.getWarehouseId()) + "）已过期，有效期至: " + es.getExpiryDate())
+                        .threshold(0)
+                        .alertMessage((drug != null ? drug.getDrugName() : "") + "（仓库: " + (warehouseName != null ? warehouseName : es.getWarehouseId()) + "）已过期（库存: " + es.getCurrentStock() + "），有效期至: " + es.getExpiryDate())
                         .isHandled(false)
                         .createTime(es.getExpiryDate().atStartOfDay())
                         .build());
@@ -280,12 +285,19 @@ public class InventoryServiceImpl implements InventoryService {
             String alertWhId = stock.getWarehouseId();
             autoResolveAlerts(drugId, alertWhId);
 
+            if (stock.getCurrentStock() <= stock.getMinStock()) {
+                List<StockAlert> existing = getUnhandledAlertsByType(drugId, alertWhId, stock.getBatchNo(), 0);
+                if (existing.isEmpty()) {
+                    createLowStockAlert(drugId, alertWhId, stock.getBatchNo(), stock.getCurrentStock(), stock.getMinStock());
+                }
+            }
             if (stock.getMaxStock() != null && stock.getCurrentStock() > stock.getMaxStock()) {
                 List<StockAlert> existing = getUnhandledAlertsByType(drugId, alertWhId, stock.getBatchNo(), 2);
                 if (existing.isEmpty()) {
                     createOverStockAlert(drugId, alertWhId, stock.getBatchNo(), stock.getCurrentStock(), stock.getMaxStock());
                 }
             }
+            checkExpiredAlerts();
         } else if (quantity > 0) {
             // ===== 入库 + 无批号：找到该仓库过期最晚的批次累加 =====
             LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<DrugStock>()
@@ -311,12 +323,19 @@ public class InventoryServiceImpl implements InventoryService {
             String alertWhId = stock.getWarehouseId();
             autoResolveAlerts(drugId, alertWhId);
 
+            if (stock.getCurrentStock() <= stock.getMinStock()) {
+                List<StockAlert> existing = getUnhandledAlertsByType(drugId, alertWhId, stock.getBatchNo(), 0);
+                if (existing.isEmpty()) {
+                    createLowStockAlert(drugId, alertWhId, stock.getBatchNo(), stock.getCurrentStock(), stock.getMinStock());
+                }
+            }
             if (stock.getMaxStock() != null && stock.getCurrentStock() > stock.getMaxStock()) {
                 List<StockAlert> existing = getUnhandledAlertsByType(drugId, alertWhId, stock.getBatchNo(), 2);
                 if (existing.isEmpty()) {
                     createOverStockAlert(drugId, alertWhId, stock.getBatchNo(), stock.getCurrentStock(), stock.getMaxStock());
                 }
             }
+            checkExpiredAlerts();
         } else {
             // ===== 出库：按 expire 升序跨批次扣减（FEFO） =====
             LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<DrugStock>().eq(DrugStock::getDrugId, drugId);
@@ -361,6 +380,7 @@ public class InventoryServiceImpl implements InventoryService {
                     }
                 }
             }
+            checkExpiredAlerts();
         }
     }
 
@@ -389,12 +409,18 @@ public class InventoryServiceImpl implements InventoryService {
             drugStockMapper.updateById(stock);
         }
 
-        // 标记该药品未处理的过期预警为已处理
-        List<StockAlert> alerts = stockAlertMapper.selectList(
-                new LambdaQueryWrapper<StockAlert>()
-                        .eq(StockAlert::getDrugId, drugId)
-                        .eq(StockAlert::getAlertType, 1)
-                        .eq(StockAlert::getIsHandled, 0));
+        // 标记该药品未处理的过期预警为已处理（按 warehouse + batch 过滤）
+        LambdaQueryWrapper<StockAlert> alertQ = new LambdaQueryWrapper<StockAlert>()
+                .eq(StockAlert::getDrugId, drugId)
+                .eq(StockAlert::getAlertType, 1)
+                .eq(StockAlert::getIsHandled, 0);
+        if (warehouseId != null && !warehouseId.isBlank()) {
+            alertQ.eq(StockAlert::getWarehouseId, warehouseId);
+        }
+        if (batchNo != null && !batchNo.isBlank()) {
+            alertQ.eq(StockAlert::getBatchNo, batchNo);
+        }
+        List<StockAlert> alerts = stockAlertMapper.selectList(alertQ);
         for (StockAlert alert : alerts) {
             alert.setIsHandled(1);
             alert.setHandleTime(LocalDateTime.now());
@@ -408,6 +434,7 @@ public class InventoryServiceImpl implements InventoryService {
                 createLowStockAlert(drugId, s.getWarehouseId(), s.getBatchNo(), 0, s.getMinStock());
             }
         }
+        checkExpiredAlerts();
     }
 
     // ==================== 库存转移 ====================
@@ -474,6 +501,7 @@ public class InventoryServiceImpl implements InventoryService {
                 createOverStockAlert(drugId, toWarehouseId, target.getBatchNo(), targetNewStock, target.getMaxStock());
             }
         }
+        checkExpiredAlerts();
     }
 
     // ==================== 私有辅助方法 ====================
@@ -489,33 +517,43 @@ public class InventoryServiceImpl implements InventoryService {
         return stock != null ? stock.getCurrentStock() : 0;
     }
 
-    /** 按仓库汇总该药品的总库存 */
-    private int getTotalStock(String drugId, String warehouseId) {
-        LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<DrugStock>()
-                .eq(DrugStock::getDrugId, drugId);
-        if (warehouseId != null) {
-            wrapper.eq(DrugStock::getWarehouseId, warehouseId);
-        } else {
-            wrapper.isNull(DrugStock::getWarehouseId);
+    /** 扫描并持久化已过期批次的预警 */
+    private void checkExpiredAlerts() {
+        LocalDate today = LocalDate.now();
+        List<DrugStock> expired = drugStockMapper.selectList(
+                new LambdaQueryWrapper<DrugStock>()
+                        .lt(DrugStock::getExpiryDate, today)
+                        .eq(DrugStock::getStatus, 1)
+                        .gt(DrugStock::getCurrentStock, 0));
+        for (DrugStock es : expired) {
+            LambdaQueryWrapper<StockAlert> dw = new LambdaQueryWrapper<StockAlert>()
+                    .eq(StockAlert::getDrugId, es.getDrugId())
+                    .eq(StockAlert::getWarehouseId, es.getWarehouseId())
+                    .eq(StockAlert::getAlertType, 1)
+                    .eq(StockAlert::getIsHandled, 0);
+            if (es.getBatchNo() != null) {
+                dw.eq(StockAlert::getBatchNo, es.getBatchNo());
+            } else {
+                dw.isNull(StockAlert::getBatchNo);
+            }
+            if (!stockAlertMapper.selectList(dw).isEmpty()) continue;
+
+            Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, es.getDrugId()));
+            String whName = getWarehouseName(es.getWarehouseId());
+            StockAlert alert = new StockAlert();
+            alert.setDrugId(es.getDrugId());
+            alert.setWarehouseId(es.getWarehouseId());
+            alert.setBatchNo(es.getBatchNo());
+            alert.setAlertType(1);
+            alert.setCurrentStock(es.getCurrentStock());
+            alert.setThreshold(0);
+            String batchTag = es.getBatchNo() != null ? "，批号: " + es.getBatchNo() : "";
+            alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + "（仓库: " + (whName != null ? whName : es.getWarehouseId()) + batchTag + "）已过期（库存: " + es.getCurrentStock() + "），有效期至: " + es.getExpiryDate());
+            alert.setIsHandled(0);
+            stockAlertMapper.insert(alert);
         }
-        return drugStockMapper.selectList(wrapper)
-                .stream().mapToInt(DrugStock::getCurrentStock).sum();
     }
 
-    /** 按仓库汇总该药品的所有批次 max_stock 之和 */
-    private int getTotalMaxStock(String drugId, String warehouseId) {
-        LambdaQueryWrapper<DrugStock> wrapper = new LambdaQueryWrapper<DrugStock>()
-                .eq(DrugStock::getDrugId, drugId);
-        if (warehouseId != null) {
-            wrapper.eq(DrugStock::getWarehouseId, warehouseId);
-        } else {
-            wrapper.isNull(DrugStock::getWarehouseId);
-        }
-        return drugStockMapper.selectList(wrapper)
-                .stream().mapToInt(DrugStock::getMaxStock).sum();
-    }
-
-    /** 查询仓库名称 */
     private String getWarehouseName(String warehouseId) {
         if (warehouseId == null) return null;
         Warehouse wh = warehouseMapper.selectOne(
@@ -557,9 +595,13 @@ public class InventoryServiceImpl implements InventoryService {
     /** 自动解除已恢复的预警（逐批次检查） */
     private void autoResolveAlerts(String drugId, String warehouseId) {
         List<StockAlert> existingAlerts = getUnhandledAlerts(drugId, warehouseId, null);
+        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
         for (StockAlert alert : existingAlerts) {
             int batchStock = getBatchStock(drugId, warehouseId, alert.getBatchNo());
-            alert.setCurrentStock(batchStock);
+            if (batchStock != alert.getCurrentStock()) {
+                alert.setCurrentStock(batchStock);
+                alert.setAlertMessage(buildAlertMessage(alert, drug, batchStock));
+            }
             if (alert.getAlertType() == 0 && batchStock > alert.getThreshold()) {
                 alert.setIsHandled(1);
                 alert.setHandleTime(LocalDateTime.now());
@@ -582,15 +624,7 @@ public class InventoryServiceImpl implements InventoryService {
         alert.setCurrentStock(totalStock);
         alert.setThreshold(minStock);
         Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
-        StringBuilder loc = new StringBuilder();
-        if (warehouseId != null || batchNo != null) {
-            loc.append("（");
-            if (warehouseId != null) loc.append("仓库: ").append(warehouseId);
-            if (warehouseId != null && batchNo != null) loc.append("，");
-            if (batchNo != null) loc.append("批号: ").append(batchNo);
-            loc.append("）");
-        }
-        alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + loc + "库存低于预警线（当前: " + totalStock + "，预警线: " + minStock + "）");
+        alert.setAlertMessage(buildAlertMessage(alert, drug, totalStock));
         alert.setIsHandled(0);
         stockAlertMapper.insert(alert);
     }
@@ -605,17 +639,39 @@ public class InventoryServiceImpl implements InventoryService {
         alert.setCurrentStock(totalStock);
         alert.setThreshold(maxStock);
         Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
+        alert.setAlertMessage(buildAlertMessage(alert, drug, totalStock));
+        alert.setIsHandled(0);
+        stockAlertMapper.insert(alert);
+    }
+
+    /** 根据预警类型和当前库存重建 alertMessage */
+    private String buildAlertMessage(StockAlert alert, Drug drug, int currentStock) {
         StringBuilder loc = new StringBuilder();
-        if (warehouseId != null || batchNo != null) {
+        String whId = alert.getWarehouseId();
+        String batchNo = alert.getBatchNo();
+        if (whId != null || batchNo != null) {
             loc.append("（");
-            if (warehouseId != null) loc.append("仓库: ").append(warehouseId);
-            if (warehouseId != null && batchNo != null) loc.append("，");
+            if (whId != null) loc.append("仓库: ").append(whId);
+            if (whId != null && batchNo != null) loc.append("，");
             if (batchNo != null) loc.append("批号: ").append(batchNo);
             loc.append("）");
         }
-        alert.setAlertMessage((drug != null ? drug.getDrugName() : "") + loc + "库存积压（当前: " + totalStock + "，上限: " + maxStock + "）");
-        alert.setIsHandled(0);
-        stockAlertMapper.insert(alert);
+        String drugName = drug != null ? drug.getDrugName() : alert.getDrugId();
+        return switch (alert.getAlertType()) {
+            case 0 -> drugName + loc + "库存低于预警线（当前: " + currentStock + "，预警线: " + alert.getThreshold() + "）";
+            case 1 -> {
+                // 保留原有"有效期至:"部分，更新当前库存
+                String suffix = "";
+                String old = alert.getAlertMessage();
+                if (old != null) {
+                    int idx = old.indexOf("有效期至:");
+                    if (idx >= 0) suffix = old.substring(idx);
+                }
+                yield drugName + loc + "已过期（库存: " + currentStock + "），" + suffix;
+            }
+            case 2 -> drugName + loc + "库存积压（当前: " + currentStock + "，上限: " + alert.getThreshold() + "）";
+            default -> alert.getAlertMessage();
+        };
     }
 
     @PostConstruct
@@ -653,5 +709,6 @@ public class InventoryServiceImpl implements InventoryService {
                 }
             }
         }
+        checkExpiredAlerts();
     }
 }

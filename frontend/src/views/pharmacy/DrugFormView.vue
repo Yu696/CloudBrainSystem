@@ -195,7 +195,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { addDrugApi, updateDrugApi, searchDrugApi } from '@/api/pharmacy'
+import { addDrugApi, updateDrugApi, getDrugDetailApi } from '@/api/pharmacy'
 
 const route = useRoute()
 const router = useRouter()
@@ -257,11 +257,9 @@ onMounted(async () => {
   if (!isNew.value) {
     pageLoading.value = true
     try {
-      const res = await searchDrugApi({ keyword: drugId.value })
-      const data = res.data as any
-      const records = data?.records || data?.list || data?.items || (Array.isArray(data) ? data : [])
-      if (records.length > 0) {
-        const item = records[0]
+      const res = await getDrugDetailApi(drugId.value)
+      const item = res.data as any
+      if (item) {
         form.drugCode = item.drugCode ?? ''
         form.drugName = item.drugName ?? ''
         form.genericName = item.genericName ?? ''

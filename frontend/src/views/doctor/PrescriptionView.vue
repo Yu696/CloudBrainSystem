@@ -32,27 +32,77 @@
                 </el-button>
               </div>
 
+              <!-- 药品选择 -->
               <el-row :gutter="16">
-                <el-col :span="10">
-                  <el-form-item label="药品名称" :prop="`items.${index}.drugName`" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
-                    <el-input v-model="item.drugName" placeholder="请输入药品名称" />
+                <el-col :span="12">
+                  <el-form-item label="药品名称" :prop="`items.${index}.drugName`" :rules="[{ required: true, message: '必填', trigger: 'change' }]">
+                    <el-select
+                      v-model="item.drugName"
+                      filterable
+                      remote
+                      reserve-keyword
+                      placeholder="输入药品名称搜索"
+                      :remote-method="(query) => searchDrugs(query, index)"
+                      :loading="drugSearchLoading"
+                      style="width:100%"
+                      @change="(val: string) => handleDrugSelect(val, index)"
+                    >
+                      <el-option
+                        v-for="d in drugOptions"
+                        :key="d.drugId"
+                        :label="d.drugName"
+                        :value="d.drugName"
+                      />
+                    </el-select>
                   </el-form-item>
                 </el-col>
-                <el-col :span="7">
-                  <el-form-item label="规格">
-                    <el-input v-model="item.spec" placeholder="如 0.25g×12片" />
+                <el-col :span="6">
+                  <el-form-item label="药品编码">
+                    <el-input :model-value="item.drugCode" disabled placeholder="选择后自动填充" />
                   </el-form-item>
                 </el-col>
-                <el-col :span="7">
-                  <el-form-item label="剂量" :prop="`items.${index}.dosage`" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
-                    <el-input v-model="item.dosage" placeholder="如 0.25g" />
+                <el-col :span="6">
+                  <el-form-item label="通用名">
+                    <el-input :model-value="item.genericName" disabled placeholder="选择后自动填充" />
                   </el-form-item>
                 </el-col>
               </el-row>
 
-              <el-row :gutter="16">
-                <el-col :span="7">
-                  <el-form-item label="频次" :prop="`items.${index}.frequency`" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
+              <!-- 药品信息（只读，自动填充） -->
+              <div v-if="item.drugId" class="drug-info-bar">
+                <el-tag size="small">{{ item.genericName || '—' }}</el-tag>
+                <el-tag size="small" type="info">规格: {{ item.spec || '—' }}</el-tag>
+                <el-tag size="small" type="info">剂型: {{ item.dosageForm || '—' }}</el-tag>
+                <el-tag size="small" type="info">厂家: {{ item.manufacturer || '—' }}</el-tag>
+                <el-tag size="small" type="info">单位: {{ item.unit || '—' }}</el-tag>
+                <el-tag size="small" type="warning">单价: ¥{{ (item.unitPrice || 0).toFixed(2) }}</el-tag>
+                <el-tag size="small" :type="item.prescriptionType === 0 ? 'success' : 'danger'">
+                  {{ item.prescriptionType === 0 ? 'OTC' : '处方药' }}
+                </el-tag>
+                <el-tag size="small" type="info">{{ item.drugCategory || '—' }}</el-tag>
+              </div>
+              <div v-if="item.usageMethod" class="usage-method-hint">
+                <el-icon><InfoFilled /></el-icon>
+                <span>参考用法：{{ item.usageMethod }}</span>
+              </div>
+              <div v-if="item.cautiousCrowd || item.sideEffects" class="precautions-hint">
+                <el-icon><WarningFilled /></el-icon>
+                <div class="precautions-text">
+                  <span v-if="item.cautiousCrowd"><strong>禁忌人群：</strong>{{ item.cautiousCrowd }}</span>
+                  <span v-if="item.cautiousCrowd && item.sideEffects" class="precautions-sep" />
+                  <span v-if="item.sideEffects"><strong>不良反应：</strong>{{ item.sideEffects }}</span>
+                </div>
+              </div>
+
+              <!-- 用法用量（医生填写） -->
+              <el-row :gutter="16" style="margin-top: 12px">
+                <el-col :span="8">
+                  <el-form-item label="每次用量" :prop="`items.${index}.dosage`" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
+                    <el-input v-model="item.dosage" placeholder="如 0.25g / 2片" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="频次" :prop="`items.${index}.frequency`" :rules="[{ required: true, message: '必填', trigger: 'change' }]">
                     <el-select v-model="item.frequency" placeholder="选择频次" style="width:100%">
                       <el-option label="每日1次(qd)" value="qd" />
                       <el-option label="每日2次(bid)" value="bid" />
@@ -62,8 +112,8 @@
                     </el-select>
                   </el-form-item>
                 </el-col>
-                <el-col :span="7">
-                  <el-form-item label="途径">
+                <el-col :span="8">
+                  <el-form-item label="给药途径">
                     <el-select v-model="item.administration" placeholder="给药途径" style="width:100%">
                       <el-option label="口服" value="口服" />
                       <el-option label="静脉注射" value="静脉注射" />
@@ -73,30 +123,25 @@
                     </el-select>
                   </el-form-item>
                 </el-col>
-                <el-col :span="5">
-                  <el-form-item label="天数" :prop="`items.${index}.days`" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
-                    <el-input-number v-model="item.days" :min="1" :max="90" controls-position="right" style="width:100%" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="5">
+              </el-row>
+
+              <el-row :gutter="16">
+                <el-col :span="6">
                   <el-form-item label="数量" :prop="`items.${index}.quantity`" :rules="[{ required: true, message: '必填', trigger: 'blur' }]">
                     <el-input-number v-model="item.quantity" :min="1" :max="999" controls-position="right" style="width:100%" />
                   </el-form-item>
                 </el-col>
-              </el-row>
-
-              <el-row :gutter="16">
-                <el-col :span="8">
+                <el-col :span="6">
                   <el-form-item label="单价(元)">
-                    <el-input-number v-model="item.unitPrice" :min="0" :precision="2" controls-position="right" style="width:100%" />
+                    <el-input :model-value="'¥' + (item.unitPrice || 0).toFixed(2)" disabled />
                   </el-form-item>
                 </el-col>
-                <el-col :span="8">
+                <el-col :span="6">
                   <el-form-item label="小计">
                     <span class="subtotal-text">¥{{ ((item.unitPrice || 0) * (item.quantity || 0)).toFixed(2) }}</span>
                   </el-form-item>
                 </el-col>
-                <el-col :span="8">
+                <el-col :span="6">
                   <el-form-item label="备注">
                     <el-input v-model="item.remark" placeholder="选填" />
                   </el-form-item>
@@ -175,9 +220,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, FirstAidKit, Plus, Delete, MagicStick } from '@element-plus/icons-vue'
+import { ArrowLeft, FirstAidKit, Plus, Delete, MagicStick, InfoFilled, WarningFilled } from '@element-plus/icons-vue'
 import { createPrescriptionApi, updatePrescriptionApi, getPrescriptionDetailApi } from '@/api/medical'
 import { getMedicalRecordDetailApi } from '@/api/medical'
+import { searchDrugApi } from '@/api/pharmacy'
 import { prescriptionCheckApi } from '@/api/ai'
 import type { FormInstance } from 'element-plus'
 
@@ -201,7 +247,17 @@ const auditFallbackMode = ref(false)
 interface DrugItem {
   drugId: string
   drugName: string
+  drugCode: string
+  genericName: string
   spec: string
+  dosageForm: string
+  manufacturer: string
+  unit: string
+  drugCategory: string
+  prescriptionType: number
+  usageMethod: string
+  cautiousCrowd: string
+  sideEffects: string
   dosage: string
   frequency: string
   administration: string
@@ -220,7 +276,17 @@ function createEmptyItem(): DrugItem {
   return {
     drugId: 'DRUG_' + Date.now(),
     drugName: '',
+    drugCode: '',
+    genericName: '',
     spec: '',
+    dosageForm: '',
+    manufacturer: '',
+    unit: '',
+    drugCategory: '',
+    prescriptionType: 0,
+    usageMethod: '',
+    cautiousCrowd: '',
+    sideEffects: '',
     dosage: '',
     frequency: '',
     administration: '口服',
@@ -237,6 +303,68 @@ const totalAmount = computed(() => {
   }, 0)
 })
 
+// --- 药品搜索 ---
+const drugSearchLoading = ref(false)
+const drugOptions = ref<any[]>([])
+const drugSearchCache = ref<Record<string, any>>({})
+
+async function searchDrugs(query: string, index: number) {
+  if (!query || query.length < 1) { drugOptions.value = []; return }
+  drugSearchLoading.value = true
+  try {
+    const res = await searchDrugApi({ keyword: query, pageSize: 20 })
+    const data = res.data as any
+    const list = data?.records || data?.list || (Array.isArray(data) ? data : [])
+    drugOptions.value = list
+    list.forEach((d: any) => { drugSearchCache.value[d.drugName] = d })
+  } catch {
+    drugOptions.value = []
+  } finally {
+    drugSearchLoading.value = false
+  }
+}
+
+function handleDrugSelect(drugName: string, index: number) {
+  const drug = drugSearchCache.value[drugName]
+  if (!drug) return
+  const item = form.items[index]
+  item.drugId = drug.drugId || item.drugId
+  item.drugCode = drug.drugCode || ''
+  item.genericName = drug.genericName || ''
+  item.spec = drug.spec || ''
+  item.dosageForm = drug.dosageForm || ''
+  item.manufacturer = drug.manufacturer || ''
+  item.unit = drug.unit || ''
+  item.drugCategory = drug.drugCategory || ''
+  item.prescriptionType = drug.prescriptionType ?? 0
+  item.unitPrice = drug.unitPrice ?? 0
+  item.usageMethod = drug.usageMethod || ''
+  item.cautiousCrowd = drug.cautiousCrowd || ''
+  item.sideEffects = drug.sideEffects || ''
+
+  // 从 usageMethod 自动解析填充用法用量
+  const um = item.usageMethod
+  if (um) {
+    // 提取给药途径：开头的"口服"/"静脉注射"/"肌肉注射"/"皮下注射"/"外用"
+    const adminMatch = um.match(/^(口服|静脉注射|肌肉注射|皮下注射|外用)/)
+    if (adminMatch) item.administration = adminMatch[1]
+
+    // 提取每次用量："一次(X)" → dosage
+    const dosageMatch = um.match(/一次([^，,]+)/)
+    if (dosageMatch) item.dosage = dosageMatch[1].trim()
+
+    // 提取频次："一日(X)次" / "每日(X)次"
+    const freqMatch = um.match(/[一每]日(\S*)次/)
+    if (freqMatch) {
+      const raw = freqMatch[1] // "2-3", "2", "1-2" 等
+      if (raw.includes('3') || raw.includes('2-3') || raw.includes('1-3')) item.frequency = 'tid'
+      else if (raw.includes('2') || raw.includes('1-2')) item.frequency = 'bid'
+      else if (raw.includes('1')) item.frequency = 'qd'
+      // 每晚 → qn
+    }
+  }
+}
+
 onMounted(async () => {
   loading.value = true
   try {
@@ -249,7 +377,17 @@ onMounted(async () => {
         form.items = pres.items.map((it: any) => ({
           drugId: it.drugId || 'DRUG_' + Date.now(),
           drugName: it.drugName || '',
+          drugCode: it.drugCode || '',
+          genericName: it.genericName || '',
           spec: it.spec || '',
+          dosageForm: it.dosageForm || '',
+          manufacturer: it.manufacturer || '',
+          unit: it.unit || '',
+          drugCategory: it.drugCategory || '',
+          prescriptionType: it.prescriptionType ?? 0,
+          usageMethod: it.usageMethod || '',
+          cautiousCrowd: it.cautiousCrowd || '',
+          sideEffects: it.sideEffects || '',
           dosage: it.dosage || '',
           frequency: it.frequency || '',
           administration: it.administration || '口服',
@@ -398,6 +536,52 @@ async function handleSubmit() {
   border-radius: var(--cb-radius-md);
   padding: 16px;
   margin-bottom: 12px;
+}
+
+.drug-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background: var(--el-fill-color-lighter);
+  border-radius: var(--cb-radius-sm);
+  border: 1px solid var(--cb-border);
+}
+
+.usage-method-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: var(--cb-radius-sm);
+}
+
+.precautions-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+  border-radius: var(--cb-radius-sm);
+}
+
+.precautions-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.6;
+}
+
+.precautions-sep {
+  display: none;
 }
 
 .drug-item-header {
