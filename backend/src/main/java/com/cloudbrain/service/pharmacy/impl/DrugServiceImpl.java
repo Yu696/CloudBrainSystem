@@ -159,4 +159,11 @@ public class DrugServiceImpl implements DrugService {
         }
         return DrugVO.fromEntity(drug);
     }
+
+    @Override
+    public List<DrugVO> all() {
+        List<Drug> drugs = drugMapper.selectList(
+                new LambdaQueryWrapper<Drug>().eq(Drug::getStatus, 1).orderByAsc(Drug::getDrugName));
+        return drugs.stream().map(DrugVO::fromEntity).toList();
+    }
 }

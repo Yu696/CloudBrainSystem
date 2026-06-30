@@ -15,9 +15,21 @@ import com.cloudbrain.dto.response.pharmacy.DrugVO;
 import com.cloudbrain.dto.response.pharmacy.StockAlertVO;
 import com.cloudbrain.dto.response.pharmacy.StockVO;
 import com.cloudbrain.dto.response.pharmacy.WarehouseVO;
+import com.cloudbrain.dto.response.PrescriptionItemVO;
+import com.cloudbrain.dto.response.PrescriptionVO;
+import com.cloudbrain.entity.Doctor;
+import com.cloudbrain.entity.Patient;
+import com.cloudbrain.entity.Prescription;
+import com.cloudbrain.entity.PrescriptionItem;
 import com.cloudbrain.entity.ShipRecord;
+import com.cloudbrain.entity.User;
 import com.cloudbrain.entity.Warehouse;
+import com.cloudbrain.mapper.DoctorMapper;
+import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.PrescriptionItemMapper;
+import com.cloudbrain.mapper.PrescriptionMapper;
 import com.cloudbrain.mapper.ShipRecordMapper;
+import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.mapper.WarehouseMapper;
 import com.cloudbrain.service.pharmacy.DispenseService;
 import com.cloudbrain.service.pharmacy.DrugService;
@@ -30,7 +42,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +63,11 @@ public class DrugController extends BaseController {
     private final DispenseService dispenseService;
     private final ShipRecordMapper shipRecordMapper;
     private final WarehouseMapper warehouseMapper;
+    private final PrescriptionMapper prescriptionMapper;
+    private final PrescriptionItemMapper prescriptionItemMapper;
+    private final UserMapper userMapper;
+    private final PatientMapper patientMapper;
+    private final DoctorMapper doctorMapper;
 
     // ==================== DR-01 药品录入 ====================
 
@@ -77,6 +97,13 @@ public class DrugController extends BaseController {
     }
 
     // ==================== DR-04 药品搜索 ====================
+
+    @Operation(summary = "获取所有可用药品列表（下拉选择用）")
+    @GetMapping("/all")
+    public Result<List<DrugVO>> allDrugs() {
+        List<DrugVO> all = drugService.all();
+        return success(all);
+    }
 
     @Operation(summary = "搜索药品（DR-04）")
     @GetMapping("/search")
@@ -218,5 +245,146 @@ public class DrugController extends BaseController {
         warehouse.setStatus(1);
         warehouseMapper.insert(warehouse);
         return success(warehouse.getWarehouseId());
+    }
+
+    @Operation(summary = "更新仓库")
+    @PutMapping("/warehouse")
+    public Result<String> updateWarehouse(
+            @Parameter(description = "仓库 ID") @RequestParam String warehouseId,
+            @Valid @RequestBody WarehouseRequest request) {
+        Warehouse warehouse = warehouseMapper.selectOne(
+                new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, warehouseId));
+        if (warehouse == null) {
+            return fail("仓库不存在");
+        }
+        warehouse.setName(request.getName());
+        warehouse.setLocation(request.getLocation());
+        if (request.getAdminId() != null) warehouse.setAdminId(request.getAdminId());
+        warehouse.setType(request.getType());
+        warehouseMapper.updateById(warehouse);
+        return success("更新成功");
+    }
+
+    @Operation(summary = "删除仓库")
+    @DeleteMapping("/warehouse")
+    public Result<String> deleteWarehouse(@Parameter(description = "仓库 ID") @RequestParam String warehouseId) {
+        Warehouse warehouse = warehouseMapper.selectOne(
+                new LambdaQueryWrapper<Warehouse>().eq(Warehouse::getWarehouseId, warehouseId));
+        if (warehouse == null) {
+            return fail("仓库不存在");
+        }
+        warehouse.setStatus(0);
+        warehouseMapper.updateById(warehouse);
+        return success("删除成功");
+    }
+
+    // ==================== 发药订单列表 ====================
+
+    @Operation(summary = "待发药处方列表")
+    @GetMapping("/dispense/list")
+    public Result<List<Map<String, Object>>> dispenseList() {
+        // 查询所有已完成的处方（status=2），排除已发药的
+        List<Prescription> prescriptions = prescriptionMapper.selectList(
+                new LambdaQueryWrapper<Prescription>()
+                        .eq(Prescription::getStatus, 2)
+                        .orderByDesc(Prescription::getCreateTime));
+
+        // 获取已发药的处方ID集合
+        List<ShipRecord> shipped = shipRecordMapper.selectList(new LambdaQueryWrapper<>());
+        java.util.Set<String> shippedPrescriptionIds = shipped.stream()
+                .map(ShipRecord::getPrescriptionId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Prescription p : prescriptions) {
+            if (shippedPrescriptionIds.contains(p.getPrescriptionId())) continue;
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("prescriptionId", p.getPrescriptionId());
+            item.put("patientId", p.getPatientId());
+            item.put("doctorId", p.getDoctorId());
+            item.put("prescriptionDesc", p.getPrescriptionDesc());
+            item.put("totalAmount", p.getTotalAmount());
+            item.put("status", p.getStatus());
+            item.put("createTime", p.getCreateTime());
+
+            // 患者姓名 — prescription.patientId 是 Patient 表的 patient_id
+            Patient pat = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, p.getPatientId()));
+            item.put("patientName", pat != null ? pat.getName() : p.getPatientId());
+
+            // 医生姓名 — prescription.doctorId 是 Doctor 表的 doctor_id
+            Doctor doc = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, p.getDoctorId()));
+            if (doc != null) {
+                User docUser = userMapper.selectOne(
+                        new LambdaQueryWrapper<User>().eq(User::getUserId, doc.getUserId()));
+                item.put("doctorName", docUser != null ? docUser.getRealName() : doc.getDoctorId());
+            } else {
+                item.put("doctorName", p.getDoctorId());
+            }
+
+            // 处方明细
+            List<PrescriptionItem> items = prescriptionItemMapper.selectList(
+                    new LambdaQueryWrapper<PrescriptionItem>()
+                            .eq(PrescriptionItem::getPrescriptionId, p.getPrescriptionId()));
+            List<Map<String, Object>> itemList = new ArrayList<>();
+            for (PrescriptionItem pi : items) {
+                Map<String, Object> im = new LinkedHashMap<>();
+                im.put("drugId", pi.getDrugId());
+                im.put("drugName", pi.getDrugName());
+                im.put("spec", pi.getSpec());
+                im.put("quantity", pi.getQuantity());
+                im.put("unitPrice", pi.getUnitPrice());
+                im.put("subtotal", pi.getSubtotal());
+                itemList.add(im);
+            }
+            item.put("items", itemList);
+            result.add(item);
+        }
+        return success(result);
+    }
+
+    @Operation(summary = "已发药记录列表")
+    @GetMapping("/dispense/records")
+    public Result<List<Map<String, Object>>> dispenseRecords() {
+        List<ShipRecord> records = shipRecordMapper.selectList(
+                new LambdaQueryWrapper<ShipRecord>().orderByDesc(ShipRecord::getCreateTime));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ShipRecord r : records) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("recordId", r.getRecordId());
+            item.put("prescriptionId", r.getPrescriptionId());
+            item.put("patientId", r.getPatientId());
+            item.put("shipNum", r.getShipNum());
+            item.put("payAmount", r.getPayAmount());
+            item.put("shipTime", r.getShipTime());
+            item.put("printStatus", r.getPrintStatus());
+
+            // 患者姓名 — ship_record.patientId 是 Patient 表的 patient_id
+            Patient pat = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, r.getPatientId()));
+            item.put("patientName", pat != null ? pat.getName() : r.getPatientId());
+
+            // 通过处方查医生（prescription.doctorId 是 Doctor 表的 doctor_id）
+            Prescription pres = prescriptionMapper.selectOne(
+                    new LambdaQueryWrapper<Prescription>().eq(Prescription::getPrescriptionId, r.getPrescriptionId()));
+            if (pres != null) {
+                Doctor doc = doctorMapper.selectOne(
+                        new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, pres.getDoctorId()));
+                if (doc != null) {
+                    User docUser = userMapper.selectOne(
+                            new LambdaQueryWrapper<User>().eq(User::getUserId, doc.getUserId()));
+                    item.put("doctorName", docUser != null ? docUser.getRealName() : doc.getDoctorId());
+                } else {
+                    item.put("doctorName", pres.getDoctorId());
+                }
+            } else {
+                item.put("doctorName", "-");
+            }
+            result.add(item);
+        }
+        return success(result);
     }
 }

@@ -14,14 +14,14 @@
       <el-table :data="warehouseList" v-loading="loading" stripe style="width: 100%">
         <el-table-column prop="name" label="仓库名称" min-width="160" />
         <el-table-column prop="location" label="仓库位置" min-width="200" />
-        <el-table-column prop="type" label="类型" width="100" align="center">
+        <el-table-column label="类型" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.type === 0 ? 'primary' : 'success'" size="small">
               {{ row.type === 0 ? '药库' : '药房' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="80" align="center">
+        <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
               {{ row.status === 1 ? '正常' : '停用' }}
@@ -29,21 +29,32 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="180" />
+        <el-table-column label="操作" width="160" fixed="right" align="center">
+          <template #default="{ row }">
+            <el-button type="primary" size="small" link @click="openEditDialog(row)">编辑</el-button>
+            <el-button type="danger" size="small" link @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-empty v-if="!loading && warehouseList.length === 0" description="暂无仓库数据" :image-size="80" />
     </div>
 
-    <!-- 新增仓库弹窗 -->
-    <el-dialog v-model="dialogVisible" title="新增仓库" width="500px" :close-on-click-modal="false">
+    <!-- 新增/编辑弹窗 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingWarehouse ? '编辑仓库' : '新增仓库'"
+      width="500px"
+      :close-on-click-modal="false"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="仓库名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入仓库名称" maxlength="50" />
         </el-form-item>
-        <el-form-item label="仓库位置" prop="location">
+        <el-form-item label="仓库位置">
           <el-input v-model="form.location" placeholder="请输入仓库位置" maxlength="200" />
         </el-form-item>
-        <el-form-item label="管理员" prop="adminId">
+        <el-form-item label="管理员 ID">
           <el-input v-model="form.adminId" placeholder="请输入管理员 ID" />
         </el-form-item>
         <el-form-item label="仓库类型" prop="type">
@@ -64,15 +75,16 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { warehouseListApi, addWarehouseApi } from '@/api/pharmacy'
+import { warehouseListApi, addWarehouseApi, updateWarehouseApi, deleteWarehouseApi } from '@/api/pharmacy'
 
 const loading = ref(false)
 const warehouseList = ref<any[]>([])
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const editingWarehouse = ref<any>(null)
 const formRef = ref<FormInstance>()
 
 const form = reactive({
@@ -109,10 +121,21 @@ async function loadWarehouseList() {
 }
 
 function openAddDialog() {
+  editingWarehouse.value = null
   form.name = ''
   form.location = ''
   form.adminId = ''
   form.type = undefined
+  dialogVisible.value = true
+  formRef.value?.clearValidate()
+}
+
+function openEditDialog(row: any) {
+  editingWarehouse.value = row
+  form.name = row.name || ''
+  form.location = row.location || ''
+  form.adminId = row.adminId || ''
+  form.type = row.type
   dialogVisible.value = true
   formRef.value?.clearValidate()
 }
@@ -123,25 +146,54 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await addWarehouseApi({
-      name: form.name,
-      location: form.location || undefined,
-      adminId: form.adminId || undefined,
-      type: form.type!
-    })
-    ElMessage.success('新增仓库成功')
+    if (editingWarehouse.value) {
+      await updateWarehouseApi(editingWarehouse.value.warehouseId, {
+        name: form.name,
+        location: form.location || undefined,
+        adminId: form.adminId || undefined,
+        type: form.type!
+      })
+      ElMessage.success('更新仓库成功')
+    } else {
+      await addWarehouseApi({
+        name: form.name,
+        location: form.location || undefined,
+        adminId: form.adminId || undefined,
+        type: form.type!
+      })
+      ElMessage.success('新增仓库成功')
+    }
     dialogVisible.value = false
     loadWarehouseList()
   } catch {
-    // error toast is handled by interceptor
+    // handled by interceptor
   } finally {
     submitting.value = false
+  }
+}
+
+async function handleDelete(row: any) {
+  try {
+    await ElMessageBox.confirm(`确定要删除仓库「${row.name}」吗？删除后不可恢复。`, '确认删除', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await deleteWarehouseApi(row.warehouseId)
+    ElMessage.success('删除成功')
+    loadWarehouseList()
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.toString() !== 'cancel') {
+      // handled by interceptor or cancel
+    }
   }
 }
 </script>
 
 <style scoped>
 .page-title {
+  font-size: 18px;
+  font-weight: 600;
   margin-bottom: 16px;
 }
 </style>

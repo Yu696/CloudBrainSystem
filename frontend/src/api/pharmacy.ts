@@ -59,7 +59,7 @@ export function drugStockListApi(params: {
 
 /** 库存预警列表（DR-06） */
 export function lowStockAlertApi(type?: number) {
-  return request.get<any>('/drug/low-stock', { params: { type, _t: Date.now() } })
+  return request.get<any>('/drug/low-stock', { params: { type } })
 }
 
 /** 发药出库（DR-07） */
@@ -74,6 +74,16 @@ export function dispenseDrugApi(data: {
 /** 取药单打印（DR-08） */
 export function printShipRecordApi(recordId: string) {
   return request.get<any>(`/drug/print/${recordId}`)
+}
+
+/** 待发药处方列表 */
+export function dispenseListApi() {
+  return request.get<any>('/drug/dispense/list')
+}
+
+/** 已发药记录列表 */
+export function dispenseRecordsApi() {
+  return request.get<any>('/drug/dispense/records')
 }
 
 /** 仓库列表（DR-09） */
@@ -130,4 +140,24 @@ export function transferStockApi(data: {
   batchNo?: string
 }) {
   return request.put<any>('/drug/stock/transfer', data)
+}
+
+/** 更新仓库 */
+export function updateWarehouseApi(warehouseId: string, data: {
+  name: string
+  location?: string
+  adminId?: string
+  type: number
+}) {
+  return request.put<any>('/drug/warehouse', data, { params: { warehouseId } })
+}
+
+/** 删除仓库 */
+export function deleteWarehouseApi(warehouseId: string) {
+  return request.delete<any>('/drug/warehouse', { params: { warehouseId } })
+}
+
+/** 获取所有可用药品（下拉选择用） */
+export function allDrugsApi() {
+  return request.get<any>('/drug/all')
 }
