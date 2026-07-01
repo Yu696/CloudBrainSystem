@@ -26,10 +26,39 @@ public class DispenseServiceImpl implements DispenseService {
     private final DrugStockMapper drugStockMapper;
     private final ShipRecordMapper shipRecordMapper;
     private final StockAlertMapper stockAlertMapper;
+    private final PrescriptionMapper prescriptionMapper;
+    private final WalletTransactionMapper walletTxMapper;
 
     @Override
     @Transactional
     public DispenseResultVO dispense(DispenseRequest request) {
+        // 校验处方存在且已审核
+        Prescription prescription = prescriptionMapper.selectOne(
+                new LambdaQueryWrapper<Prescription>().eq(Prescription::getPrescriptionId, request.getPrescriptionId()));
+        if (prescription == null) {
+            throw new BusinessException("处方不存在");
+        }
+        if (prescription.getStatus() != 2) {
+            throw new BusinessException("处方未审核或状态不正确，无法发药");
+        }
+
+        // 校验是否已支付
+        boolean paid = walletTxMapper.selectCount(
+                new LambdaQueryWrapper<WalletTransaction>()
+                        .eq(WalletTransaction::getRefId, request.getPrescriptionId())
+                        .eq(WalletTransaction::getType, 2)) > 0;
+        if (!paid) {
+            throw new BusinessException("处方未支付，请先完成支付");
+        }
+
+        // 校验是否已发药（防止重复发药）
+        boolean alreadyShipped = shipRecordMapper.selectCount(
+                new LambdaQueryWrapper<ShipRecord>()
+                        .eq(ShipRecord::getPrescriptionId, request.getPrescriptionId())) > 0;
+        if (alreadyShipped) {
+            throw new BusinessException("该处方已发药，不可重复操作");
+        }
+
         int totalShipNum = 0;
         BigDecimal totalPayAmount = BigDecimal.ZERO;
 
@@ -115,6 +144,10 @@ public class DispenseServiceImpl implements DispenseService {
         record.setShipTime(LocalDateTime.now());
         record.setPrintStatus(0);
         shipRecordMapper.insert(record);
+
+        // 更新处方状态为已发药
+        prescription.setStatus(3);
+        prescriptionMapper.updateById(prescription);
 
         return DispenseResultVO.builder()
                 .recordId(recordId)

@@ -651,7 +651,6 @@ public class AiServiceImpl implements AiService {
     }
 
     /** 解析视觉 AI 的 JSON 响应为 ImageDiagnosisVO */
-    @SuppressWarnings("unchecked")
     private ImageDiagnosisVO parseVisionResponse(String rawResponse, ImageDiagnosisRequest request) {
         String json = extractJson(rawResponse);
         Map<String, Object> map;

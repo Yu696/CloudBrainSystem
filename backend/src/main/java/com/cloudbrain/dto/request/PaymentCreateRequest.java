@@ -14,5 +14,5 @@ public class PaymentCreateRequest {
     private String patientId;
 
     @NotNull(message = "支付方式不能为空")
-    private Integer paymentMethod;  // 0=医保卡 1=现金 2=扫码 3=银行卡
+    private Integer paymentMethod;  // 0=医保卡 1=现金 2=扫码 3=银行卡 4=钱包支付
 }

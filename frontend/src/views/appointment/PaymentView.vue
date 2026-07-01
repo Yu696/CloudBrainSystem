@@ -80,6 +80,12 @@
                     <span class="fee-number">{{ appointment?.totalFee || '0' }}</span>
                   </div>
                 </div>
+                <div class="fee-display" style="margin-top: 8px">
+                  <span class="fee-label">钱包余额</span>
+                  <span :class="balance < (appointment?.totalFee || 0) ? 'text-red' : 'text-green'" class="balance-text">
+                    ￥{{ balance.toFixed(2) }}
+                  </span>
+                </div>
 
                 <el-divider />
 
@@ -148,23 +154,30 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   InfoFilled, Coin, CircleCheck, CircleCheckFilled,
-  CreditCard, Wallet, Shop
+  CreditCard, Wallet, Shop, Money
 } from '@element-plus/icons-vue'
 import { getAppointmentDetailApi, createPaymentApi } from '@/api/appointment'
+import { walletBalanceApi } from '@/api/wallet'
 import { useAppointmentStore } from '@/stores/appointment'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const route = useRoute()
 const apptStore = useAppointmentStore()
+const userStore = useUserStore()
 
 const appointmentId = route.params.id as string
 const appointment = ref<any>(null)
 const pageLoading = ref(false)
 const payLoading = ref(false)
-const selectedMethod = ref(0)
+const selectedMethod = ref(4)
 const paymentDone = ref(false)
+const balance = ref(0)
+
+const patientId = (userStore.userInfo as any)?.patientId || apptStore.patientId
 
 const payMethods = [
+  { value: 4, label: '钱包支付', icon: Money, color: 'linear-gradient(135deg, #1a7fbf, #0d5a8a)' },
   { value: 0, label: '医保卡支付', icon: CreditCard, color: 'linear-gradient(135deg, #1a7fbf, #0d5a8a)' },
   { value: 2, label: '扫码支付', icon: Wallet, color: 'linear-gradient(135deg, #52c41a, #389e0d)' },
   { value: 3, label: '银行卡支付', icon: CreditCard, color: 'linear-gradient(135deg, #faad14, #d48806)' },
@@ -177,7 +190,7 @@ onMounted(async () => {
     router.push('/appointment/dept')
     return
   }
-  await loadAppointment()
+  await Promise.all([loadAppointment(), loadBalance()])
 })
 
 async function loadAppointment() {
@@ -190,6 +203,14 @@ async function loadAppointment() {
   } finally {
     pageLoading.value = false
   }
+}
+
+async function loadBalance() {
+  if (!patientId) return
+  try {
+    const res = await walletBalanceApi(patientId)
+    balance.value = (res.data as any)?.balance ?? 0
+  } catch { balance.value = 0 }
 }
 
 function statusTag(status: number): string {
@@ -436,6 +457,14 @@ async function handlePay() {
   font-size: var(--cb-font-lg);
   letter-spacing: 2px;
 }
+
+.balance-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.text-green { color: #52c41a; }
+.text-red { color: #ff4d4f; }
 
 /* 支付成功 */
 .pay-success {

@@ -387,4 +387,57 @@ public class DrugController extends BaseController {
         }
         return success(result);
     }
+
+    @Operation(summary = "待审处方列表（status=1 待审核）")
+    @GetMapping("/dispense/pending-audit")
+    public Result<List<Map<String, Object>>> pendingAuditList() {
+        List<Prescription> prescriptions = prescriptionMapper.selectList(
+                new LambdaQueryWrapper<Prescription>()
+                        .eq(Prescription::getStatus, 1)
+                        .orderByDesc(Prescription::getCreateTime));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Prescription p : prescriptions) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("prescriptionId", p.getPrescriptionId());
+            item.put("patientId", p.getPatientId());
+            item.put("doctorId", p.getDoctorId());
+            item.put("prescriptionDesc", p.getPrescriptionDesc());
+            item.put("totalAmount", p.getTotalAmount());
+            item.put("status", p.getStatus());
+            item.put("createTime", p.getCreateTime());
+
+            Patient pat = patientMapper.selectOne(
+                    new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, p.getPatientId()));
+            item.put("patientName", pat != null ? pat.getName() : p.getPatientId());
+
+            Doctor doc = doctorMapper.selectOne(
+                    new LambdaQueryWrapper<Doctor>().eq(Doctor::getDoctorId, p.getDoctorId()));
+            if (doc != null) {
+                User docUser = userMapper.selectOne(
+                        new LambdaQueryWrapper<User>().eq(User::getUserId, doc.getUserId()));
+                item.put("doctorName", docUser != null ? docUser.getRealName() : doc.getDoctorId());
+            } else {
+                item.put("doctorName", p.getDoctorId());
+            }
+
+            List<PrescriptionItem> items = prescriptionItemMapper.selectList(
+                    new LambdaQueryWrapper<PrescriptionItem>()
+                            .eq(PrescriptionItem::getPrescriptionId, p.getPrescriptionId()));
+            List<Map<String, Object>> itemList = new ArrayList<>();
+            for (PrescriptionItem pi : items) {
+                Map<String, Object> im = new LinkedHashMap<>();
+                im.put("drugId", pi.getDrugId());
+                im.put("drugName", pi.getDrugName());
+                im.put("spec", pi.getSpec());
+                im.put("quantity", pi.getQuantity());
+                im.put("unitPrice", pi.getUnitPrice());
+                im.put("subtotal", pi.getSubtotal());
+                itemList.add(im);
+            }
+            item.put("items", itemList);
+            result.add(item);
+        }
+        return success(result);
+    }
 }

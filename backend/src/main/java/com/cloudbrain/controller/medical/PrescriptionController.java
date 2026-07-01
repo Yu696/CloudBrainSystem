@@ -52,4 +52,18 @@ public class PrescriptionController extends BaseController {
     public Result<PrescriptionVO> detail(@RequestParam String prescriptionId) {
         return success(prescriptionService.getPrescriptionDetail(prescriptionId));
     }
+
+    @Operation(summary = "审核处方（待审核→已审核）")
+    @PutMapping("/audit")
+    public Result<String> audit(@RequestParam String prescriptionId) {
+        prescriptionService.auditPrescription(prescriptionId);
+        return success("审核成功");
+    }
+
+    @Operation(summary = "支付处方费用")
+    @PostMapping("/pay")
+    public Result<String> pay(@RequestParam String prescriptionId) {
+        prescriptionService.payOrder(prescriptionId);
+        return success("支付成功");
+    }
 }

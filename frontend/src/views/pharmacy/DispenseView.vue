@@ -5,6 +5,37 @@
     <!-- 订单列表视图 -->
     <div v-if="!currentOrder" class="order-list-view">
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+        <el-tab-pane label="待审核" name="audit">
+          <div class="cb-card">
+            <el-table :data="auditList" v-loading="loading" stripe>
+              <el-table-column prop="prescriptionId" label="处方 ID" width="180" />
+              <el-table-column prop="patientName" label="患者" width="100" />
+              <el-table-column prop="doctorName" label="医生" width="100" />
+              <el-table-column prop="prescriptionDesc" label="处方描述" min-width="160" />
+              <el-table-column label="药品明细" min-width="240">
+                <template #default="{ row }">
+                  <div v-for="(it, i) in row.items" :key="i" class="drug-tag-row">
+                    <el-tag size="small" type="info">{{ it.drugName || it.drugId }}</el-tag>
+                    <span class="qty">×{{ it.quantity }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="totalAmount" label="金额" width="90" align="right">
+                <template #default="{ row }">￥{{ row.totalAmount }}</template>
+              </el-table-column>
+              <el-table-column prop="createTime" label="开方时间" width="170" />
+              <el-table-column label="操作" width="80" fixed="right" align="center">
+                <template #default="{ row }">
+                  <el-button type="primary" size="small" :loading="auditingId === row.prescriptionId" @click="handleAudit(row)">
+                    {{ auditingId === row.prescriptionId ? '审核中' : '审核' }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="!loading && auditList.length === 0" description="暂无待审核处方" :image-size="80" />
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="待发药" name="pending">
           <div class="cb-card">
             <el-table :data="pendingList" v-loading="loading" stripe>
@@ -211,7 +242,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ArrowLeft, Goods, List } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { dispenseDrugApi, printShipRecordApi, dispenseListApi, dispenseRecordsApi, allDrugsApi } from '@/api/pharmacy'
+import { dispenseDrugApi, printShipRecordApi, dispenseListApi, dispenseRecordsApi, allDrugsApi, pendingAuditListApi } from '@/api/pharmacy'
+import { auditPrescriptionApi } from '@/api/medical'
 
 interface DispenseItem {
   drugId: string
@@ -226,8 +258,10 @@ const activeTab = ref('pending')
 const formRef = ref<FormInstance>()
 
 const pendingList = ref<any[]>([])
+const auditList = ref<any[]>([])
 const doneList = ref<any[]>([])
 const currentOrder = ref<any>(null)
+const auditingId = ref('')
 const drugOptions = ref<any[]>([])
 
 interface DispenseForm {
@@ -328,8 +362,12 @@ async function loadOrders() {
   }
 }
 
-function handleTabChange() {
-  loadOrders()
+function handleTabChange(tab: string) {
+  if (tab === 'audit') {
+    loadAuditList()
+  } else {
+    loadOrders()
+  }
 }
 
 function enterDispense(order: any) {
@@ -384,6 +422,31 @@ async function handlePrint(row: any) {
     loadOrders()
   } catch {
     ElMessage.error('打印失败')
+  }
+}
+
+async function loadAuditList() {
+  loading.value = true
+  try {
+    const res = await pendingAuditListApi()
+    auditList.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    auditList.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleAudit(row: any) {
+  auditingId.value = row.prescriptionId
+  try {
+    await auditPrescriptionApi(row.prescriptionId)
+    ElMessage.success('审核成功')
+    loadAuditList()
+  } catch {
+    ElMessage.error('审核失败')
+  } finally {
+    auditingId.value = ''
   }
 }
 </script>

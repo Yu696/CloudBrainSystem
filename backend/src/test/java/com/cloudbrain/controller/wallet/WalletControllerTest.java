@@ -66,6 +66,9 @@ class WalletControllerTest {
     @MockBean
     private UserMapper userMapper;
 
+    @MockBean
+    private PrescriptionMapper prescriptionMapper;
+
     @Nested
     @DisplayName("正常操作")
     class HappyPath {
@@ -102,6 +105,7 @@ class WalletControllerTest {
         void testPendingOrders() throws Exception {
             when(appointmentMapper.selectList(any())).thenReturn(List.of());
             when(examinationOrderMapper.selectList(any())).thenReturn(List.of());
+            when(prescriptionMapper.selectList(any())).thenReturn(List.of());
 
             mockMvc.perform(get("/api/wallet/pending-orders").param("patientId", "PAT_001"))
                     .andExpect(status().isOk())

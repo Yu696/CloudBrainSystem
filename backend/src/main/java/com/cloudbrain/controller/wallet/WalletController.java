@@ -4,18 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.common.exception.BusinessException;
-import com.cloudbrain.entity.Appointment;
-import com.cloudbrain.entity.Doctor;
-import com.cloudbrain.entity.ExaminationOrder;
-import com.cloudbrain.entity.Patient;
-import com.cloudbrain.entity.User;
-import com.cloudbrain.entity.WalletTransaction;
-import com.cloudbrain.mapper.AppointmentMapper;
-import com.cloudbrain.mapper.DoctorMapper;
-import com.cloudbrain.mapper.ExaminationOrderMapper;
-import com.cloudbrain.mapper.PatientMapper;
-import com.cloudbrain.mapper.UserMapper;
-import com.cloudbrain.mapper.WalletTransactionMapper;
+import com.cloudbrain.entity.*;
+import com.cloudbrain.mapper.*;
 import com.cloudbrain.util.UUIDUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +35,7 @@ public class WalletController extends BaseController {
     private final ExaminationOrderMapper examinationOrderMapper;
     private final DoctorMapper doctorMapper;
     private final UserMapper userMapper;
+    private final PrescriptionMapper prescriptionMapper;
 
     @Data
     public static class RechargeRequest {
@@ -179,6 +170,31 @@ public class WalletController extends BaseController {
             item.put("desc", e.getExamName());
             item.put("createTime", e.getCreateTime());
             item.put("routePath", "/exam/pay/" + e.getOrderId());
+            orders.add(item);
+        }
+
+        // 3. 待支付处方（已审核但未支付）
+        List<Prescription> prescriptions = prescriptionMapper.selectList(
+                new LambdaQueryWrapper<Prescription>()
+                        .eq(Prescription::getPatientId, patientId)
+                        .eq(Prescription::getStatus, 2)
+                        .orderByDesc(Prescription::getCreateTime));
+        for (Prescription p : prescriptions) {
+            // 排除已支付的
+            boolean alreadyPaid = walletTxMapper.selectCount(
+                    new LambdaQueryWrapper<WalletTransaction>()
+                            .eq(WalletTransaction::getRefId, p.getPrescriptionId())
+                            .eq(WalletTransaction::getType, 2)) > 0;
+            if (alreadyPaid) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("type", "药费");
+            item.put("refId", p.getPrescriptionId());
+            item.put("amount", p.getTotalAmount());
+            item.put("desc", p.getPrescriptionDesc() != null ? p.getPrescriptionDesc() : "处方");
+            item.put("createTime", p.getCreateTime());
+            item.put("routePath", "/prescription/pay/" + p.getPrescriptionId());
             orders.add(item);
         }
 

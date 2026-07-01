@@ -6,7 +6,9 @@ import com.cloudbrain.common.BaseController;
 import com.cloudbrain.common.Result;
 import com.cloudbrain.entity.*;
 import com.cloudbrain.mapper.AiCallLogMapper;
+import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +41,9 @@ public class AiAdminController extends BaseController {
     private final PromptTemplateService promptTemplateService;
     private final DiseaseKbService diseaseKbService;
     private final AiCallLogMapper aiCallLogMapper;
+    private final DoctorMapper doctorMapper;
     private final PatientMapper patientMapper;
+    private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
 
     // ==================== Prompt 模板管理（5 个 API） ====================
@@ -139,6 +143,7 @@ public class AiAdminController extends BaseController {
         byType.put("triage", buildTypeStats(0, start, end));
         byType.put("diagnosis", buildTypeStats(1, start, end));
         byType.put("prescriptionCheck", buildTypeStats(2, start, end));
+        byType.put("imageDiagnosis", buildTypeStats(3, start, end));
         stats.put("byType", byType);
 
         stats.put("dailyTrend", List.of());
@@ -149,7 +154,7 @@ public class AiAdminController extends BaseController {
     @Operation(summary = "AI 调用明细列表")
     @GetMapping("/monitor/logs")
     public Result<Map<String, Object>> getMonitorLogs(
-            @Parameter(description = "日志类型：0=分诊 1=诊断 2=处方审核") @RequestParam(required = false) Integer type,
+            @Parameter(description = "日志类型：0=分诊 1=诊断 2=处方审核 3=影像诊断") @RequestParam(required = false) Integer type,
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") int pageSize,
             @Parameter(description = "开始日期（yyyy-MM-dd）") @RequestParam(required = false) String startDate,
@@ -167,6 +172,45 @@ public class AiAdminController extends BaseController {
 
         Page<AiCallLog> pageResult = aiCallLogMapper.selectPage(mpPage, w);
 
+        // 批量查询医生姓名（通过 doctor 表关联 user 表）
+        Set<String> doctorIds = pageResult.getRecords().stream()
+                .map(AiCallLog::getDoctorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, String> doctorNameMap = new HashMap<>();
+        if (!doctorIds.isEmpty()) {
+            // doctor_id → user_id
+            Map<String, String> doctorUserMap = new HashMap<>();
+            doctorMapper.selectList(
+                    new LambdaQueryWrapper<Doctor>().in(Doctor::getDoctorId, doctorIds)
+            ).forEach(d -> doctorUserMap.put(d.getDoctorId(), d.getUserId()));
+            // user_id → real_name
+            Set<String> userIds = new HashSet<>(doctorUserMap.values());
+            if (!userIds.isEmpty()) {
+                userMapper.selectList(
+                        new LambdaQueryWrapper<User>().in(User::getUserId, userIds)
+                ).forEach(u -> {
+                    // 反向映射：doctorId → userName
+                    doctorUserMap.forEach((docId, uid) -> {
+                        if (uid.equals(u.getUserId())) {
+                            doctorNameMap.put(docId, u.getRealName() != null ? u.getRealName() : u.getUsername());
+                        }
+                    });
+                });
+            }
+        }
+
+        // 兜底：doctor_id 可能直接存的是 userId（如影像诊断），直接查 User 表
+        Set<String> unmatchedDoctorIds = doctorIds.stream()
+                .filter(id -> !doctorNameMap.containsKey(id))
+                .collect(Collectors.toSet());
+        if (!unmatchedDoctorIds.isEmpty()) {
+            userMapper.selectList(
+                    new LambdaQueryWrapper<User>().in(User::getUserId, unmatchedDoctorIds)
+            ).forEach(u -> doctorNameMap.put(u.getUserId(),
+                    u.getRealName() != null ? u.getRealName() : u.getUsername()));
+        }
+
         // 批量查询患者姓名
         Set<String> patientIds = pageResult.getRecords().stream()
                 .map(AiCallLog::getPatientId)
@@ -176,12 +220,16 @@ public class AiAdminController extends BaseController {
         if (!patientIds.isEmpty()) {
             patientMapper.selectList(
                     new LambdaQueryWrapper<Patient>().in(Patient::getPatientId, patientIds)
-            ).forEach(p -> patientNameMap.put(p.getPatientId(), p.getName()));
+            ).forEach(p -> patientNameMap.put(p.getPatientId(),
+                    p.getName() != null ? p.getName() : p.getPatientId()));
         }
 
-        // 转换记录，添加患者姓名
+        // 转换记录，添加调用人姓名和患者姓名
         List<Map<String, Object>> recordList = pageResult.getRecords().stream().map(log -> {
             Map<String, Object> record = objectMapper.convertValue(log, Map.class);
+            record.put("callerName", log.getDoctorId() != null
+                    ? doctorNameMap.getOrDefault(log.getDoctorId(), log.getDoctorId())
+                    : null);
             record.put("patientName", log.getPatientId() != null
                     ? patientNameMap.getOrDefault(log.getPatientId(), log.getPatientId())
                     : null);
@@ -225,7 +273,6 @@ public class AiAdminController extends BaseController {
          .isNotNull(AiCallLog::getResponseTimeMs);
         if (start != null) w.ge(AiCallLog::getCreateTime, start);
         if (end != null) w.le(AiCallLog::getCreateTime, end);
-        w.select(AiCallLog::getResponseTimeMs);
 
         long avgMs = 0;
         List<AiCallLog> logs = aiCallLogMapper.selectList(w);

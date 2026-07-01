@@ -24,3 +24,8 @@ export function payExamApi(orderId: string) {
 export function pendingOrdersApi(patientId: string) {
   return request.get<any>('/wallet/pending-orders', { params: { patientId } })
 }
+
+/** 处方药费支付 */
+export function payPrescriptionApi(prescriptionId: string) {
+  return request.post<string>('/prescription/pay', null, { params: { prescriptionId } })
+}

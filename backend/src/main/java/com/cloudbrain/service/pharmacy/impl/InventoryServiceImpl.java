@@ -40,6 +40,12 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public StockVO getStock(String drugId) {
+        // 校验药品是否存在
+        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
+        if (drug == null) {
+            throw new BusinessException("药品不存在");
+        }
+
         List<DrugStock> stocks = drugStockMapper.selectList(
                 new LambdaQueryWrapper<DrugStock>().eq(DrugStock::getDrugId, drugId));
         if (stocks.isEmpty()) {
@@ -47,7 +53,6 @@ public class InventoryServiceImpl implements InventoryService {
         }
         DrugStock stock = stocks.get(0);
 
-        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
         String warehouseName = null;
         if (stock.getWarehouseId() != null) {
             Warehouse wh = warehouseMapper.selectOne(
@@ -57,7 +62,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         return StockVO.builder()
                 .drugId(stock.getDrugId())
-                .drugName(drug != null ? drug.getDrugName() : null)
+                .drugName(drug.getDrugName())
                 .warehouseId(stock.getWarehouseId())
                 .warehouseName(warehouseName)
                 .currentStock(stock.getCurrentStock())
@@ -95,6 +100,10 @@ public class InventoryServiceImpl implements InventoryService {
         List<StockVO> records = new ArrayList<>();
         for (DrugStock stock : result.getRecords()) {
             Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, stock.getDrugId()));
+            // 跳过药品已不存在的孤儿库存记录
+            if (drug == null) {
+                continue;
+            }
             String warehouseName = null;
             if (stock.getWarehouseId() != null) {
                 Warehouse wh = warehouseMapper.selectOne(
@@ -103,7 +112,7 @@ public class InventoryServiceImpl implements InventoryService {
             }
             records.add(StockVO.builder()
                     .drugId(stock.getDrugId())
-                    .drugName(drug != null ? drug.getDrugName() : null)
+                    .drugName(drug.getDrugName())
                     .warehouseId(stock.getWarehouseId())
                     .warehouseName(warehouseName)
                     .currentStock(stock.getCurrentStock())
@@ -117,7 +126,9 @@ public class InventoryServiceImpl implements InventoryService {
                     .updateTime(stock.getUpdateTime())
                     .build());
         }
-        return PageResult.of(result.getTotal(), page, pageSize, records);
+        // total 需扣除被跳过的孤儿记录数
+        long total = result.getTotal() - (result.getRecords().size() - records.size());
+        return PageResult.of(total, page, pageSize, records);
     }
 
     // ==================== 库存预警列表 ====================
@@ -248,6 +259,12 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public void adjustStock(String drugId, Integer quantity, String warehouseId, String batchNo,
                             LocalDate productionDate, LocalDate expiryDate, Integer minStock, Integer maxStock) {
+        // 校验药品是否存在，防止产生孤儿库存记录
+        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
+        if (drug == null) {
+            throw new BusinessException("药品不存在");
+        }
+
         DrugStock stock;
         int newStock;
 
@@ -442,6 +459,12 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public void transferStock(String drugId, String fromWarehouseId, String toWarehouseId, Integer quantity, String batchNo) {
+        // 校验药品是否存在，防止调拨产生孤儿库存记录
+        Drug drug = drugMapper.selectOne(new LambdaQueryWrapper<Drug>().eq(Drug::getDrugId, drugId));
+        if (drug == null) {
+            throw new BusinessException("药品不存在");
+        }
+
         // 1. 源仓库扣减
         LambdaQueryWrapper<DrugStock> sourceWrapper = new LambdaQueryWrapper<DrugStock>()
                 .eq(DrugStock::getDrugId, drugId)

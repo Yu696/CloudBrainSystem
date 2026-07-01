@@ -212,6 +212,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/exam/ExamPayView.vue'),
         meta: { title: '检查费支付' }
       },
+      // 患者端 - 处方药费支付
+      {
+        path: 'prescription/pay/:prescriptionId',
+        name: 'PrescriptionPay',
+        component: () => import('@/views/prescription/PrescriptionPayView.vue'),
+        meta: { title: '处方支付' }
+      },
       // 患者端 - 钱包
       {
         path: 'wallet',

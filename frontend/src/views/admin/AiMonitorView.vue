@@ -107,10 +107,11 @@
             <el-option label="分诊" :value="0" />
             <el-option label="诊断" :value="1" />
             <el-option label="处方审核" :value="2" />
+            <el-option label="影像诊断" :value="3" />
           </el-select>
         </div>
       </div>
-      <el-table :data="logs" v-loading="logsLoading" stripe style="width:100%">
+      <el-table :data="logs" v-loading="logsLoading" stripe style="width:100%" @row-click="showDetail" class="clickable-table">
         <el-table-column prop="callId" label="ID" width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="100">
           <template #default="{ row }"><el-tag size="small">{{ getTypeName(row.callType) }}</el-tag></template>
@@ -134,6 +135,42 @@
         <el-pagination v-model:current-page="logFilter.page" :page-size="logFilter.pageSize" :total="logTotal" layout="prev, pager, next" @current-change="loadLogs" small background />
       </div>
     </div>
+
+    <!-- AI 调用详情弹窗 -->
+    <el-dialog v-model="detailVisible" title="AI 调用详情" width="680px" destroy-on-close>
+      <template v-if="selectedRow">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="调用 ID" :span="2">{{ selectedRow.callId }}</el-descriptions-item>
+          <el-descriptions-item label="类型">
+            <el-tag size="small">{{ getTypeName(selectedRow.callType) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="selectedRow.status === 1 ? 'success' : 'danger'" size="small">{{ getStatusName(selectedRow.status) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="调用人">{{ getUserDisplay(selectedRow) }}</el-descriptions-item>
+          <el-descriptions-item label="响应时间">{{ selectedRow.responseTimeMs }}ms</el-descriptions-item>
+          <el-descriptions-item label="AI 模型">{{ selectedRow.aiModel || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="置信度">{{ selectedRow.confidenceScore != null ? (selectedRow.confidenceScore * 100).toFixed(1) + '%' : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="调用时间">{{ selectedRow.createTime }}</el-descriptions-item>
+          <el-descriptions-item v-if="selectedRow.inputSummary" label="输入摘要" :span="2">{{ selectedRow.inputSummary }}</el-descriptions-item>
+        </el-descriptions>
+
+        <div v-if="selectedRow.errorMessage" style="margin-top:16px">
+          <div class="detail-section-title" style="color:#FF3B30">错误信息</div>
+          <div class="detail-code-block error-block">{{ selectedRow.errorMessage }}</div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="detail-section-title">输入数据</div>
+          <div class="detail-code-block">{{ formatJson(selectedRow.inputData) }}</div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="detail-section-title">AI 输出 / 记录</div>
+          <div class="detail-code-block">{{ formatJson(selectedRow.outputData) }}</div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -148,6 +185,8 @@ const stats = ref<any>({})
 const logs = ref<any[]>([])
 const logTotal = ref(0)
 const avgResponseTimeMs = ref(0)
+const detailVisible = ref(false)
+const selectedRow = ref<any>(null)
 
 const logFilter = reactive({
   type: undefined as number | undefined,
@@ -159,6 +198,7 @@ const typeColors: Record<string, string> = {
   triage: '#007AFF',
   diagnosis: '#34C759',
   prescriptionCheck: '#FF9500',
+  imageDiagnosis: '#AF52DE',
   recordGenerate: '#FF3B30'
 }
 
@@ -166,6 +206,7 @@ const typeLabels: Record<string, string> = {
   triage: '智能分诊',
   diagnosis: '诊断分析',
   prescriptionCheck: '处方审核',
+  imageDiagnosis: '影像诊断',
   recordGenerate: '病历生成'
 }
 
@@ -197,7 +238,7 @@ function formatDailyDate(dateStr: string) {
 }
 
 function getTypeName(callType: number) {
-  const map: Record<number, string> = { 0: '智能分诊', 1: '诊断分析', 2: '处方审核' }
+  const map: Record<number, string> = { 0: '智能分诊', 1: '诊断分析', 2: '处方审核', 3: '影像诊断' }
   return map[callType] || '未知'
 }
 
@@ -206,7 +247,24 @@ function getStatusName(status: number) {
 }
 
 function getUserDisplay(row: any) {
-  return row.patientName || row.doctorId || '-'
+  if (row.callType === 0) {
+    return row.patientName || row.patientId || '-'
+  }
+  return row.callerName || row.doctorId || '-'
+}
+
+function showDetail(row: any) {
+  selectedRow.value = row
+  detailVisible.value = true
+}
+
+function formatJson(raw: string | undefined | null): string {
+  if (!raw) return '（无）'
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
 }
 
 onMounted(() => {
@@ -334,4 +392,39 @@ async function loadLogs() {
 }
 .daily-calls { font-size: 11px; color: #8E8E93; font-weight: 500; }
 .daily-date { font-size: 10px; color: #c7c7cc; }
+
+/* 调用明细行可点击 */
+.clickable-table :deep(.el-table__body tr) {
+  cursor: pointer;
+}
+.clickable-table :deep(.el-table__body tr:hover) {
+  background: #f5f7fa;
+}
+
+/* 详情弹窗 */
+.detail-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1C1C1E;
+  margin-bottom: 8px;
+}
+.detail-code-block {
+  background: #f6f8fa;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #2c3e50;
+}
+.error-block {
+  background: #fff0f0;
+  border-color: #ffcccc;
+  color: #c0392b;
+}
 </style>

@@ -6,17 +6,13 @@ import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.dto.request.PrescriptionCreateRequest;
 import com.cloudbrain.dto.response.PrescriptionItemVO;
 import com.cloudbrain.dto.response.PrescriptionVO;
-import com.cloudbrain.entity.Drug;
-import com.cloudbrain.entity.MedicalRecord;
-import com.cloudbrain.entity.Prescription;
-import com.cloudbrain.entity.PrescriptionItem;
-import com.cloudbrain.mapper.DrugMapper;
-import com.cloudbrain.mapper.MedicalRecordMapper;
-import com.cloudbrain.mapper.PrescriptionItemMapper;
-import com.cloudbrain.mapper.PrescriptionMapper;
+import com.cloudbrain.entity.*;
+import com.cloudbrain.mapper.*;
 import com.cloudbrain.service.medical.PrescriptionService;
 import com.cloudbrain.util.UUIDUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +27,8 @@ public class PrescriptionServiceImpl extends ServiceImpl<PrescriptionMapper, Pre
     private final MedicalRecordMapper medicalRecordMapper;
     private final PrescriptionItemMapper prescriptionItemMapper;
     private final DrugMapper drugMapper;
+    private final PatientMapper patientMapper;
+    private final WalletTransactionMapper walletTxMapper;
 
     @Override
     @Transactional
@@ -176,5 +174,78 @@ public class PrescriptionServiceImpl extends ServiceImpl<PrescriptionMapper, Pre
         }).toList());
 
         return vo;
+    }
+
+    @Override
+    @Transactional
+    public void auditPrescription(String prescriptionId) {
+        Prescription prescription = this.getOne(new LambdaQueryWrapper<Prescription>()
+                .eq(Prescription::getPrescriptionId, prescriptionId));
+        if (prescription == null) {
+            throw new BusinessException("处方不存在");
+        }
+        if (prescription.getStatus() != 1) {
+            throw new BusinessException("仅待审核状态的处方可审核");
+        }
+
+        prescription.setStatus(2);
+        prescription.setAuditStatus(1);
+
+        // 记录审核人
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof User user) {
+            prescription.setAuditId(user.getUserId());
+        }
+
+        updateById(prescription);
+    }
+
+    @Override
+    @Transactional
+    public void payOrder(String prescriptionId) {
+        Prescription prescription = this.getOne(new LambdaQueryWrapper<Prescription>()
+                .eq(Prescription::getPrescriptionId, prescriptionId));
+        if (prescription == null) {
+            throw new BusinessException("处方不存在");
+        }
+        if (prescription.getStatus() != 2) {
+            throw new BusinessException("仅已审核状态的处方可支付");
+        }
+
+        // 检查是否已支付
+        boolean alreadyPaid = walletTxMapper.selectCount(
+                new LambdaQueryWrapper<WalletTransaction>()
+                        .eq(WalletTransaction::getRefId, prescriptionId)
+                        .eq(WalletTransaction::getType, 2)) > 0;
+        if (alreadyPaid) {
+            throw new BusinessException("该处方已支付");
+        }
+
+        // 从钱包扣款
+        Patient patient = patientMapper.selectOne(
+                new LambdaQueryWrapper<Patient>().eq(Patient::getPatientId, prescription.getPatientId()));
+        if (patient == null) {
+            throw new BusinessException("患者档案不存在");
+        }
+
+        BigDecimal fee = prescription.getTotalAmount() != null ? prescription.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal before = patient.getBalance() != null ? patient.getBalance() : BigDecimal.ZERO;
+        if (before.compareTo(fee) < 0) {
+            throw new BusinessException("钱包余额不足");
+        }
+        BigDecimal after = before.subtract(fee);
+        patient.setBalance(after);
+        patientMapper.updateById(patient);
+
+        // 记录交易
+        WalletTransaction tx = new WalletTransaction();
+        tx.setTransactionId(UUIDUtil.generateTransactionId());
+        tx.setPatientId(prescription.getPatientId());
+        tx.setType(2); // 药费
+        tx.setAmount(fee.negate());
+        tx.setBalanceAfter(after);
+        tx.setRefId(prescriptionId);
+        tx.setRemark("药费：处方" + prescriptionId);
+        walletTxMapper.insert(tx);
     }
 }

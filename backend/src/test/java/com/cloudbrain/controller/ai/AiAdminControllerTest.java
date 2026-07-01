@@ -6,7 +6,9 @@ import com.cloudbrain.common.exception.BusinessException;
 import com.cloudbrain.config.TestDataSourceConfig;
 import com.cloudbrain.entity.*;
 import com.cloudbrain.mapper.AiCallLogMapper;
+import com.cloudbrain.mapper.DoctorMapper;
 import com.cloudbrain.mapper.PatientMapper;
+import com.cloudbrain.mapper.UserMapper;
 import com.cloudbrain.service.ai.AiService;
 import com.cloudbrain.service.ai.DiseaseKbService;
 import com.cloudbrain.service.ai.PromptTemplateService;
@@ -76,7 +78,13 @@ class AiAdminControllerTest {
     private AiCallLogMapper aiCallLogMapper;
 
     @MockBean
+    private DoctorMapper doctorMapper;
+
+    @MockBean
     private PatientMapper patientMapper;
+
+    @MockBean
+    private UserMapper userMapper;
 
     private static final String TEMPLATE_ID = "PTMP_0000000000000001";
 

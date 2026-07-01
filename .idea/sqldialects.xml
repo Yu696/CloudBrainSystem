@@ -12,6 +12,7 @@
     <file url="file://$PROJECT_DIR$/sql/init/15-stock_alert_warehouse.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/init/16-drug_stock_batch_uk.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/init/17-stock_alert_batch.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/sql/init/18-cleanup-orphan-stock.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/seed/ai_call_log.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/seed/disease_knowledge_seed.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/sql/seed/extend_departments.sql" dialect="MySQL" />

@@ -6,6 +6,11 @@ import com.cloudbrain.dto.request.pharmacy.DispenseRequest;
 import com.cloudbrain.dto.response.pharmacy.DispenseResultVO;
 import com.cloudbrain.dto.response.pharmacy.StockAlertVO;
 import com.cloudbrain.dto.response.pharmacy.StockVO;
+import com.cloudbrain.entity.Prescription;
+import com.cloudbrain.entity.WalletTransaction;
+import com.cloudbrain.mapper.PrescriptionMapper;
+import com.cloudbrain.mapper.WalletTransactionMapper;
+import com.cloudbrain.util.UUIDUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -14,6 +19,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,10 +35,40 @@ class DispenseServiceTest {
     @Autowired
     private InventoryService inventoryService;
 
+    @Autowired
+    private PrescriptionMapper prescriptionMapper;
+
+    @Autowired
+    private WalletTransactionMapper walletTxMapper;
+
+    /** 为指定处方ID创建已审核处方 + 支付记录，使发药校验通过 */
+    private void preparePrescriptionForDispense(String prescriptionId, String patientId) {
+        Prescription p = new Prescription();
+        p.setPrescriptionId(prescriptionId);
+        p.setPatientId(patientId);
+        p.setRecordId("REC_test001");
+        p.setDoctorId("DOC_001");
+        p.setStatus(2); // 已审核
+        p.setAuditStatus(1);
+        p.setTotalAmount(BigDecimal.valueOf(50));
+        prescriptionMapper.insert(p);
+
+        WalletTransaction tx = new WalletTransaction();
+        tx.setTransactionId(UUIDUtil.generateTransactionId());
+        tx.setPatientId(patientId);
+        tx.setType(2); // 药费
+        tx.setAmount(new BigDecimal("-50"));
+        tx.setBalanceAfter(new BigDecimal("50"));
+        tx.setRefId(prescriptionId);
+        tx.setRemark("药费：处方" + prescriptionId);
+        walletTxMapper.insert(tx);
+    }
+
     @Test
     @Order(1)
     @DisplayName("正常发药—库存扣减 + 发药记录生成")
     void testDispense() {
+        preparePrescriptionForDispense("PRS_TEST_001", "PAT_001");
         StockVO before = inventoryService.getStock("DRUG_001");
         int beforeStock = before.getCurrentStock();
 
@@ -58,6 +94,7 @@ class DispenseServiceTest {
     @Order(2)
     @DisplayName("库存不足应抛异常")
     void testInsufficientStock() {
+        preparePrescriptionForDispense("PRS_TEST_002", "PAT_001");
         DispenseRequest request = new DispenseRequest();
         request.setPrescriptionId("PRS_TEST_002");
         request.setPatientId("PAT_001");
@@ -73,6 +110,7 @@ class DispenseServiceTest {
     @Order(3)
     @DisplayName("过期药品发药应抛异常")
     void testExpiredDrug() {
+        preparePrescriptionForDispense("PRS_TEST_003", "PAT_001");
         // DRUG_003 的批号 20240120 已于 2026-01-20 过期
         DispenseRequest request = new DispenseRequest();
         request.setPrescriptionId("PRS_TEST_003");
@@ -89,6 +127,7 @@ class DispenseServiceTest {
     @Order(4)
     @DisplayName("发药后低于预警线自动生成预警")
     void testLowStockAlertAfterDispense() {
+        preparePrescriptionForDispense("PRS_TEST_004", "PAT_001");
         // DRUG_003 当前库存=5，预警线=10。发1个后=4，低于预警线
         // 但 DRUG_003 已过期不能用，改用 DRUG_004 (库存200, 预警线20)
         // 需要大量发药才会触发预警，先查库存

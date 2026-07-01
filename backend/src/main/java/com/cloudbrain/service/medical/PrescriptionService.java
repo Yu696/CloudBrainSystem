@@ -21,4 +21,10 @@ public interface PrescriptionService {
 
     /** 处方详情（含明细） */
     PrescriptionVO getPrescriptionDetail(String prescriptionId);
+
+    /** 审核处方（待审核→已审核） */
+    void auditPrescription(String prescriptionId);
+
+    /** 支付处方费用（钱包扣款） */
+    void payOrder(String prescriptionId);
 }

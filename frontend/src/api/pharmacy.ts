@@ -166,3 +166,8 @@ export function deleteWarehouseApi(warehouseId: string) {
 export function allDrugsApi() {
   return request.get<any>('/drug/all')
 }
+
+/** 待审核处方列表（status=1） */
+export function pendingAuditListApi() {
+  return request.get<any>('/drug/dispense/pending-audit')
+}

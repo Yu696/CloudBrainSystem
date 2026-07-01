@@ -116,3 +116,13 @@ export function listImagingOrdersApi(doctorId?: string) {
 export function listAllExaminationOrdersApi(doctorId?: string) {
   return request.get<any[]>('/examination/all-orders', { params: { doctorId } })
 }
+
+/** 审核处方（待审核→已审核） */
+export function auditPrescriptionApi(prescriptionId: string) {
+  return request.put<string>('/prescription/audit', null, { params: { prescriptionId } })
+}
+
+/** 支付处方费用 */
+export function payPrescriptionApi(prescriptionId: string) {
+  return request.post<string>('/prescription/pay', null, { params: { prescriptionId } })
+}
