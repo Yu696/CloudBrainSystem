@@ -218,9 +218,26 @@ public class AiAdminController extends BaseController {
 
     private Map<String, Object> buildTypeStats(Integer callType, LocalDateTime start, LocalDateTime end) {
         long total = countByType(callType, start, end);
+
+        // 计算该类型的平均响应时间
+        LambdaQueryWrapper<AiCallLog> w = new LambdaQueryWrapper<>();
+        w.eq(AiCallLog::getCallType, callType)
+         .isNotNull(AiCallLog::getResponseTimeMs);
+        if (start != null) w.ge(AiCallLog::getCreateTime, start);
+        if (end != null) w.le(AiCallLog::getCreateTime, end);
+        w.select(AiCallLog::getResponseTimeMs);
+
+        long avgMs = 0;
+        List<AiCallLog> logs = aiCallLogMapper.selectList(w);
+        if (!logs.isEmpty()) {
+            avgMs = logs.stream()
+                    .mapToLong(l -> l.getResponseTimeMs() != null ? l.getResponseTimeMs() : 0)
+                    .sum() / logs.size();
+        }
+
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("calls", total);
-        m.put("avgMs", 0); // 简化：不计算平均耗时
+        m.put("avgMs", avgMs);
         return m;
     }
 }
